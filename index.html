@@ -1,3 +1,8 @@
+<!-- v40 update:
+- Namen verschijnen nu al bij inloggen zodra een deelnemer is goedgekeurd.
+- Betaald staat volledig los van toegang en blijft alleen administratie.
+-->
+
 
 <!-- v38 update:
 - Finaleschema Laatste 32 gebruikt nu per deelnemer exact de eigen voorspelde poulestand per pouleplek.
@@ -364,7 +369,7 @@ function hasAccess(){
   const cur = state.currentParticipant;
   if(!cur) return false;
   const fresh = state.participants.find(p=>p.id===cur.id);
-  return !!fresh && fresh.status==="approved" && fresh.paid===true;
+  return !!fresh && fresh.status==="approved";
 }
 function publicTab(tab){return tab==="signup" || tab==="admin";}
 function updateNavigation(){
@@ -375,7 +380,7 @@ function updateNavigation(){
 function showTab(tab){
   if(!publicTab(tab) && !hasAccess()){
     tab="signup";
-    setTimeout(()=>alert("Je hebt pas toegang nadat je bent goedgekeurd én betaald hebt."),50);
+    setTimeout(()=>alert("Je hebt toegang zodra je bent goedgekeurd door de beheerder."),50);
   }
   window.currentTab=tab;
   ["standings","signup","predictions","finals","bonus","chat","admin","rules"].forEach(t=>{
@@ -489,7 +494,7 @@ function officialBonusMap(){const map={}; state.officialBonus.forEach(b=>map[b.q
 function participantBonusMap(pid){const map={}; state.bonus.filter(b=>b.participant_id===pid).forEach(b=>map[b.question_id]=b.answer); return map;}
 
 function otherPredictionsHTML(matchId, isKnockout=false){
-  const approved=state.participants.filter(p=>p.status==="approved" && p.paid && !participantIsDeleted(p));
+  const approved=state.participants.filter(p=>p.status==="approved" && !participantIsDeleted(p));
   const chips=[];
   approved.forEach(p=>{
     const pred=state.predictions.find(x=>x.participant_id===p.id && String(x.match_id)===String(matchId));
@@ -550,7 +555,7 @@ function countrySelect(id,value="", options=null, attrs="", optionLabels={}){
     return `<option value="${esc(n)}" data-ko-label="${esc(extraLabel)}" ${n===value?"selected":""}>${esc(label)}</option>`;
   }).join("")}</select>`;
   if(!isKo) return select;
-  return `<div class="ko-country-row">${countryFlagImg(value, `flag-${id}`)}${select}</div>`;
+  return `<div class="ko-country-row">${countryFlagImg(value, `flag-${id}`)}${select}</div><div id="label-${id}" class="ko-choice-label">${selectedLabel?esc(selectedLabel):''}</div>`;
 }
 function participantPredictedPlaceLabel(pid, countryName){
   const group=matches.find(m=>m.home.name===countryName || m.away.name===countryName)?.group;
@@ -829,9 +834,9 @@ function renderAccessBox(){
   const cur=state.currentParticipant;
   const fresh=cur?state.participants.find(p=>p.id===cur.id):null;
   if(state.adminUnlocked){el.innerHTML=`<div class="notice">🔐 Beheerder actief: je hebt toegang tot alles.</div>`;return;}
-  if(!fresh){el.innerHTML=`<div class="notice">🔒 Meld je aan of kies je goedgekeurde naam. Pas na goedkeuring én betaling zie je de poule.</div>`;return;}
+  if(!fresh){el.innerHTML=`<div class="notice">🔒 Meld je aan of kies je goedgekeurde naam. Na goedkeuring kun je deelnemen.</div>`;return;}
   if(fresh.status!=="approved"){el.innerHTML=`<div class="notice">⏳ Je aanmelding staat nog op: <strong>${esc(fresh.status)}</strong>. Wacht op goedkeuring.</div>`;return;}
-  if(!fresh.paid){el.innerHTML=`<div class="notice">💶 Je bent goedgekeurd, maar betaling staat nog niet aangevinkt. Na betaling krijg je toegang.</div>`;return;}
+  
   el.innerHTML=`<div class="notice">✅ Ingelogd als <strong>${esc(fresh.name)}</strong>. Je hebt toegang tot de poule.</div>`;
 }
 function rankMovementHTML(participantId, currentIndex){
@@ -880,8 +885,8 @@ function renderStandings(){
 }
 function renderSignup(){
   const open = !!state.settings.registration_open;
-  const approved=state.participants.filter(p=>p.status==="approved" && p.paid);
-  const loginBox=`<div class="access-box"><h3>Ik ben al goedgekeurd</h3><p class="small">Kies je naam en vul je wachtwoord in. Je krijgt pas toegang als je bent goedgekeurd én betaald hebt.</p><label>Naam</label><select id="loginPlayer"><option value="">Kies je naam</option>${approved.map(p=>`<option value="${p.id}" ${state.currentParticipant&&state.currentParticipant.id===p.id?"selected":""}>${esc(p.name)}</option>`).join("")}</select><label>Wachtwoord</label><input id="loginPassword" type="password" placeholder="Je wachtwoord"><button class="save" onclick="loginWithPassword()">Inloggen</button></div>`;
+  const approved=state.participants.filter(p=>p.status==="approved");
+  const loginBox=`<div class="access-box"><h3>Ik ben al goedgekeurd</h3><p class="small">Kies je naam en vul je wachtwoord in. Je krijgt toegang zodra je bent goedgekeurd.</p><label>Naam</label><select id="loginPlayer"><option value="">Kies je naam</option>${approved.map(p=>`<option value="${p.id}" ${state.currentParticipant&&state.currentParticipant.id===p.id?"selected":""}>${esc(p.name)}</option>`).join("")}</select><label>Wachtwoord</label><input id="loginPassword" type="password" placeholder="Je wachtwoord"><button class="save" onclick="loginWithPassword()">Inloggen</button></div>`;
   document.getElementById("signupBox").innerHTML = loginBox + (open ? `
     <div class="notice">Inschrijven staat open. Na goedkeuring en betaling kun je deelnemen.</div>
     <label>Naam</label><input id="suName" placeholder="Je naam">
