@@ -1,3 +1,23 @@
+<!-- v44 update:
+- In het overzicht tonen finalevoorspellingen nu ook de gekozen landen in kleine tekst.
+- Bonusvragen en antwoorden van alle deelnemers staan onderaan het overzicht.
+-->
+
+<!-- v43 update:
+- Scrollbalken in tabblad 'Alle voorspellingen' zijn verborgen.
+- Finaleschema staat nu ook onderaan in het overzicht.
+-->
+
+<!-- v42 update:
+- In tabblad 'Alle voorspellingen' kleuren poulevoorspellingen automatisch na officiële uitslag.
+- Groen = exact goed, oranje = winnaar/gelijkspel goed, rood = fout, met punten klein eronder.
+-->
+
+<!-- v41 update:
+- Extra tabblad 'Alle voorspellingen' toegevoegd.
+- Goedgekeurde deelnemers kunnen daar per wedstrijd alle ingevulde uitslagen naast elkaar bekijken.
+-->
+
 <!-- v40 update:
 - Namen verschijnen nu al bij inloggen zodra een deelnemer is goedgekeurd.
 - Betaald staat volledig los van toegang en blijft alleen administratie.
@@ -126,7 +146,7 @@ header{position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#0f172
 header h1{margin:0;font-size:28px}
 .container{max-width:1150px;margin:0 auto;padding:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
-.nav{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-bottom:16px}
+.nav{display:grid;grid-template-columns:repeat(9,1fr);gap:8px;margin-bottom:16px}
 .nav button{background:#24324a;color:white;border:none;border-radius:12px;padding:11px;font-weight:800;cursor:pointer}
 .nav button.active{background:var(--blue)}
 .nav-public{grid-template-columns:repeat(2,1fr)}
@@ -180,6 +200,22 @@ button.save.saved{background:var(--green)} button.danger{background:var(--red)} 
 
 select option:disabled{color:#64748b;background:#111827}
 .ko-choice-label{font-size:12px;color:#86efac;margin:-5px 0 8px 38px;font-weight:800}
+
+.pred-cell{border-radius:10px;padding:7px 8px;font-weight:900;display:inline-block;min-width:58px}
+.pred-cell.pending-cell{background:#334155;color:#e2e8f0}
+.pred-cell.exact-cell{background:#14532d;color:#bbf7d0}
+.pred-cell.outcome-cell{background:#78350f;color:#fed7aa}
+.pred-cell.wrong-cell{background:#7f1d1d;color:#fecaca}
+.pred-points{display:block;font-size:10px;font-weight:800;opacity:.9;margin-top:2px}
+
+/* Verberg scrollbalken maar laat horizontaal scrollen wel werken */
+div[style*="overflow-x:auto"]{
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+div[style*="overflow-x:auto"]::-webkit-scrollbar{
+  display:none;
+}
 @media(max-width:800px){.nav{grid-template-columns:1fr 1fr}.podium{grid-template-columns:1fr}header h1{font-size:23px}.container{padding:10px}.card{padding:12px}.table{font-size:12px}}
 
 .knockout-winner-toggle{
@@ -214,6 +250,7 @@ select option:disabled{color:#64748b;background:#111827}
   <div class="nav hidden" id="mainNav">
     <button id="btn-standings" onclick="showTab('standings')">📊 Stand</button>
     <button id="btn-predictions" onclick="showTab('predictions')">✍️ Invullen</button>
+    <button id="btn-overview" onclick="showTab('overview')">👥 Overzicht</button>
     <button id="btn-finals" onclick="showTab('finals')">🏆 Finaleschema</button>
     <button id="btn-bonus" onclick="showTab('bonus')">⭐ Bonus</button>
     <button id="btn-chat" onclick="showTab('chat')">💬 Berichten</button>
@@ -227,6 +264,7 @@ select option:disabled{color:#64748b;background:#111827}
   <section id="tab-signup" class="card"><h2>📝 Aanmelden</h2><div id="signupBox"></div></section>
   <section id="tab-standings" class="card hidden"><h2>📊 Deelnemersstand</h2><div id="standings"></div></section>
   <section id="tab-predictions" class="card hidden"><h2>✍️ Voorspellingen invullen</h2><div id="predictionBox"></div></section>
+  <section id="tab-overview" class="card hidden"><h2>👥 Alle voorspellingen</h2><div id="overviewBox"></div></section>
   <section id="tab-finals" class="card hidden"><h2>🏆 Finaleschema</h2><div id="finalsBox"></div></section>
   <section id="tab-bonus" class="card hidden"><h2>⭐ Bonusvragen</h2><div id="bonusBox"></div></section>
   <section id="tab-chat" class="card hidden"><h2>💬 Berichten</h2><div id="chatBox"></div></section>
@@ -383,7 +421,7 @@ function showTab(tab){
     setTimeout(()=>alert("Je hebt toegang zodra je bent goedgekeurd door de beheerder."),50);
   }
   window.currentTab=tab;
-  ["standings","signup","predictions","finals","bonus","chat","admin","rules"].forEach(t=>{
+  ["standings","signup","predictions","overview","finals","bonus","chat","admin","rules"].forEach(t=>{
     document.getElementById("tab-"+t).classList.toggle("hidden",t!==tab);
     const btn=document.getElementById("btn-"+t);
     if(btn) btn.classList.toggle("active",t===tab);
@@ -1284,6 +1322,116 @@ function bonusProgress(pid){
   const filled=bonusQuestions.filter(q=>String(ans[q.id]||'').trim()!=='').length;
   return {filled,total:bonusQuestions.length};
 }
+
+function overviewPredictionCell(pred, res, pid, matchId){
+  const filled=pred && pred.home_goals!==null && pred.away_goals!==null && pred.home_goals!==undefined && pred.away_goals!==undefined;
+  if(!filled) return `<span class="pred-cell pending-cell">-<span class="pred-points">nog leeg</span></span>`;
+
+  const scoreText=`${esc(pred.home_goals)}-${esc(pred.away_goals)}`;
+  if(!res || res.home_goals===null || res.away_goals===null || res.home_goals===undefined || res.away_goals===undefined){
+    return `<span class="pred-cell pending-cell">${scoreText}<span class="pred-points">nog geen uitslag</span></span>`;
+  }
+
+  const points=scorePrediction(pred,res) * (participantJokers(pid).includes(String(matchId)) ? 2 : 1);
+  const basePoints=scorePrediction(pred,res);
+  let cls='wrong-cell';
+  let label='0 punten';
+  if(basePoints===6){
+    cls='exact-cell';
+    label=`${points} punten`;
+  }else if(basePoints===3){
+    cls='outcome-cell';
+    label=`${points} punten`;
+  }
+
+  return `<span class="pred-cell ${cls}">${scoreText}<span class="pred-points">${label}</span></span>`;
+}
+
+function renderOverview(){
+  const el=document.getElementById("overviewBox");
+  if(!el) return;
+  if(!hasAccess()){
+    el.innerHTML=`<div class="notice">🔒 Je ziet dit overzicht pas na goedkeuring.</div>`;
+    return;
+  }
+
+  const participants=state.participants
+    .filter(p=>p.status==="approved" && !participantIsDeleted(p))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+
+  if(!participants.length){
+    el.innerHTML=`<div class="notice">Nog geen goedgekeurde deelnemers.</div>`;
+    return;
+  }
+
+  const resMap=resultMap();
+  let html=`<div class="notice">Hier zie je alle voorspellingen van deelnemers. Groen = exact goed, oranje = winnaar/gelijkspel goed, rood = fout.</div>`;
+
+  // Poulewedstrijden
+  allGroups().forEach(group=>{
+    html+=`<div class="group-title">${groupOrderName(group)}</div>`;
+    html+=`<div style="overflow-x:auto"><table class="table"><thead><tr><th>Wedstrijd</th><th>Officieel</th>${participants.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>`;
+    matches.filter(m=>m.group===group).forEach(m=>{
+      const official=resMap[String(m.id)];
+      const officialFilled=official && official.home_goals!==null && official.away_goals!==null && official.home_goals!==undefined && official.away_goals!==undefined;
+      html+=`<tr>
+        <td>${teamHTML(m.home)} <span class="small">vs</span> ${teamHTML(m.away)}</td>
+        <td><strong>${officialFilled ? `${esc(official.home_goals)}-${esc(official.away_goals)}` : "-"}</strong></td>
+        ${participants.map(p=>{
+          const pred=state.predictions.find(x=>x.participant_id===p.id && String(x.match_id)===String(m.id));
+          return `<td>${overviewPredictionCell(pred, official, p.id, m.id)}</td>`;
+        }).join("")}
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  });
+
+  // Finaleschema
+  const finalIds = knockoutMatchIds();
+  if(finalIds && finalIds.length){
+    html+=`<div class="group-title">🏆 Finaleschema</div>`;
+    html+=`<div style="overflow-x:auto"><table class="table"><thead><tr><th>Wedstrijd</th><th>Officieel</th>${participants.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>`;
+
+    finalIds.forEach(id=>{
+      const official=resMap[String(id)];
+      const officialFilled=official && official.home_goals!==null && official.away_goals!==null && official.home_goals!==undefined && official.away_goals!==undefined;
+      html+=`<tr>
+        <td>Wedstrijd ${id}</td>
+        <td><strong>${officialFilled ? `${esc(official.home_goals)}-${esc(official.away_goals)}` : "-"}</strong></td>
+        ${participants.map(p=>{
+          const pred=state.predictions.find(x=>x.participant_id===p.id && String(x.match_id)===String(id));
+          const picks = participantKnockoutTeams(p.id)[String(id)] || {};
+          const teams = [picks.home, picks.away].filter(Boolean).join(' vs ');
+          return `<td>
+            ${overviewPredictionCell(pred, official, p.id, id)}
+            ${teams ? `<div class="small" style="margin-top:4px">${esc(teams)}</div>` : ``}
+          </td>`;
+        }).join("")}
+      </tr>`;
+    });
+
+    html+=`</tbody></table></div>`;
+  }
+
+  // Bonusvragen
+  html+=`<div class="group-title">⭐ Bonusvragen</div>`;
+  html+=`<div style="overflow-x:auto"><table class="table"><thead><tr><th>Vraag</th>${participants.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>`;
+
+  bonusQuestions.forEach(q=>{
+    html+=`<tr>
+      <td>${esc(q.question)}</td>
+      ${participants.map(p=>{
+        const answer = participantBonusMap(p.id)[q.id] || '-';
+        return `<td>${esc(answer)}</td>`;
+      }).join("")}
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div>`;
+
+  el.innerHTML=html;
+}
+
 function renderFinals(){
   if(!hasAccess()){document.getElementById("finalsBox").innerHTML=`<div class="notice">🔒 Je ziet het finaleschema pas na goedkeuring en betaling.</div>`;return;}
   const teams=getKnockoutTeams();
@@ -1689,7 +1837,7 @@ function renderRules(){
   document.getElementById("rulesBox").innerHTML=`<div class="card"><h3>Poulewedstrijden</h3><table class="table"><tbody><tr><td>Exacte uitslag goed</td><td><strong>6 punten</strong></td></tr><tr><td>Winnaar/gelijkspel goed</td><td><strong>3 punten</strong></td></tr><tr><td>Joker ingezet op poulewedstrijd</td><td><strong>Punten x2</strong></td></tr></tbody></table><p class="small">Poulepunten tellen direct per wedstrijd zodra de beheerder die officiële uitslag invult.</p></div><div class="card"><h3>Knock-out wedstrijden</h3><table class="table"><thead><tr><th>Ronde</th><th>Uitslag exact</th><th>Winnaar/gelijkspel</th><th>Land door verkeerde plek</th><th>Land juiste plek</th><th>Alles exact extra</th></tr></thead><tbody><tr><td>Laatste 32 / Achtste finale</td><td>9 pnt</td><td>3 pnt</td><td>2 pnt per land</td><td>4 pnt per land</td><td>9 pnt extra</td></tr><tr><td>Kwartfinale</td><td>9 pnt</td><td>3 pnt</td><td>4 pnt per land</td><td>6 pnt per land</td><td>13 pnt extra</td></tr><tr><td>Halve finale</td><td>9 pnt</td><td>3 pnt</td><td>6 pnt per land</td><td>8 pnt per land</td><td>17 pnt extra</td></tr><tr><td>Finale</td><td>9 pnt</td><td>3 pnt</td><td>10 pnt per land</td><td>10 pnt per land</td><td>25 pnt extra</td></tr></tbody></table><p class="small">Beheer is leidend: landpunten tellen direct zodra de beheerder de landen invult. Uitslagpunten komen erbij zodra de beheerder de officiële uitslag invult. Haal je als beheerder iets weg, dan verdwijnen die punten ook weer.</p></div><div class="card"><h3>Bonusvragen</h3><p>Per goede bonusvraag: <strong>10 punten</strong></p></div>`;
 }
 function logout(){localStorage.removeItem("wk_current_participant");localStorage.removeItem("wk_admin_unlocked");state.currentParticipant=null;state.adminUnlocked=false;renderAll();showTab("signup");}
-function renderAll(){updateNavigation();renderAccessBox();renderStandings();renderSignup();renderPredictions();renderFinals();renderBonus();renderChat();renderAdmin();renderRules();renderStickyProgress(window.currentTab);}
+function renderAll(){updateNavigation();renderAccessBox();renderStandings();renderSignup();renderPredictions();renderOverview();renderFinals();renderBonus();renderChat();renderAdmin();renderRules();renderStickyProgress(window.currentTab);}
 loadAll();
 </script>
 </body>
