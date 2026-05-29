@@ -1,3 +1,15 @@
+<!-- v46 update:
+- Opslaan van bonusvragen geeft pas Opgeslagen als Supabase de opgeslagen regels ook teruggeeft.
+- loadAll controleert nu fouten op alle Supabase-tabellen, niet alleen deelnemers.
+- Overzicht gebruikt dezelfde samengevoegde opslagdata als de schermen zelf.
+-->
+
+<!-- v45 update:
+- Bonusvragen hebben nu een knop Alle bonusvragen opslaan.
+- Bonusvragen, jokers, poulevoorspellingen en finaleschema krijgen een lokale back-up per deelnemer zodat ingevulde velden niet wegvallen als Supabase na opslaan tijdelijk niets terugleest.
+- Opslag werkt nu direct de lokale state bij en gebruikt Supabase-data plus lokale back-up bij opnieuw renderen.
+-->
+
 <!-- v44 update:
 - In het overzicht tonen finalevoorspellingen nu ook de gekozen landen in kleine tekst.
 - Bonusvragen en antwoorden van alle deelnemers staan onderaan het overzicht.
@@ -442,6 +454,45 @@ function showToast(message="✅ Opgeslagen"){
   window.toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);
 }
 
+
+// Lokale back-up per deelnemer.
+// Dit voorkomt dat ingevulde velden wegvallen als Supabase wel "opgeslagen" teruggeeft,
+// maar de select-policy de nieuwe rij nog niet terugleest of de verbinding kort hapert.
+function localKey(type,pid){return `wk_${type}_${pid}`;}
+function readLocalRows(type,pid){
+  if(!pid) return [];
+  try{return JSON.parse(localStorage.getItem(localKey(type,pid)) || "[]");}catch(e){return [];}
+}
+function writeLocalRows(type,pid,rows){
+  if(!pid) return;
+  localStorage.setItem(localKey(type,pid), JSON.stringify(rows || []));
+}
+function mergeRowsByKey(existing, incoming, keyFn){
+  const map=new Map();
+  (existing||[]).forEach(row=>map.set(keyFn(row), row));
+  (incoming||[]).forEach(row=>map.set(keyFn(row), row));
+  return [...map.values()];
+}
+function cacheParticipantRows(type,pid,rows){
+  if(!pid || pid==='admin') return;
+  const keyFn = type==='predictions'
+    ? (r=>String(r.match_id))
+    : (r=>String(r.question_id));
+  const current=readLocalRows(type,pid);
+  writeLocalRows(type,pid,mergeRowsByKey(current, rows, keyFn));
+}
+function getMergedBonusRows(pid){
+  // Supabase-data wint als die bestaat; lokale back-up vult gaten aan.
+  const dbRows=state.bonus.filter(b=>b.participant_id===pid);
+  const localRows=readLocalRows('bonus_answers',pid).map(r=>({...r,participant_id:pid}));
+  return mergeRowsByKey(localRows, dbRows, r=>String(r.question_id));
+}
+function getMergedPredictionRows(pid){
+  const dbRows=state.predictions.filter(p=>p.participant_id===pid);
+  const localRows=readLocalRows('predictions',pid).map(r=>({...r,participant_id:pid}));
+  return mergeRowsByKey(localRows, dbRows, r=>String(r.match_id));
+}
+
 function deletedParticipantsGlobal(){
   const raw = state.settings.deleted_participants || [];
   if(Array.isArray(raw)) return raw;
@@ -487,7 +538,8 @@ async function loadAll(){
       db.from("messages").select("*").order("created_at", {ascending:false}).limit(80),
       db.from("app_settings").select("*")
     ]);
-    if(p.error) throw p.error;
+    const loadError = [p, pr, r, b, ob, msg, set].find(x=>x && x.error)?.error;
+    if(loadError) throw loadError;
 
     // Eerst instellingen laden, vooral de globale verwijderlijst.
     // Anders kunnen nieuwe gebruikers oude verwijderde deelnemers nog zien.
@@ -527,15 +579,15 @@ async function loadAll(){
 }
 
 function resultMap(){const map={}; state.results.forEach(r=>map[String(r.match_id)]=r); return map;}
-function predictionMap(pid){const map={}; state.predictions.filter(p=>p.participant_id===pid).forEach(p=>map[String(p.match_id)]=p); return map;}
+function predictionMap(pid){const map={}; getMergedPredictionRows(pid).forEach(p=>map[String(p.match_id)]=p); return map;}
 function officialBonusMap(){const map={}; state.officialBonus.forEach(b=>map[b.question_id]=b.answer); return map;}
-function participantBonusMap(pid){const map={}; state.bonus.filter(b=>b.participant_id===pid).forEach(b=>map[b.question_id]=b.answer); return map;}
+function participantBonusMap(pid){const map={}; getMergedBonusRows(pid).forEach(b=>map[b.question_id]=b.answer); return map;}
 
 function otherPredictionsHTML(matchId, isKnockout=false){
   const approved=state.participants.filter(p=>p.status==="approved" && !participantIsDeleted(p));
   const chips=[];
   approved.forEach(p=>{
-    const pred=state.predictions.find(x=>x.participant_id===p.id && String(x.match_id)===String(matchId));
+    const pred=predictionMap(p.id)[String(matchId)];
     if(!pred || pred.home_goals==null || pred.away_goals==null) return;
     let text=`${esc(p.name)}: ${esc(pred.home_goals)}-${esc(pred.away_goals)}`;
     if(isKnockout){
@@ -1378,7 +1430,7 @@ function renderOverview(){
         <td>${teamHTML(m.home)} <span class="small">vs</span> ${teamHTML(m.away)}</td>
         <td><strong>${officialFilled ? `${esc(official.home_goals)}-${esc(official.away_goals)}` : "-"}</strong></td>
         ${participants.map(p=>{
-          const pred=state.predictions.find(x=>x.participant_id===p.id && String(x.match_id)===String(m.id));
+          const pred=predictionMap(p.id)[String(m.id)];
           return `<td>${overviewPredictionCell(pred, official, p.id, m.id)}</td>`;
         }).join("")}
       </tr>`;
@@ -1399,7 +1451,7 @@ function renderOverview(){
         <td>Wedstrijd ${id}</td>
         <td><strong>${officialFilled ? `${esc(official.home_goals)}-${esc(official.away_goals)}` : "-"}</strong></td>
         ${participants.map(p=>{
-          const pred=state.predictions.find(x=>x.participant_id===p.id && String(x.match_id)===String(id));
+          const pred=predictionMap(p.id)[String(id)];
           const picks = participantKnockoutTeams(p.id)[String(id)] || {};
           const teams = [picks.home, picks.away].filter(Boolean).join(' vs ');
           return `<td>
@@ -1536,6 +1588,8 @@ async function saveKnockoutPrediction(id,btn){
   ];
   const b=await db.from("bonus_answers").upsert(bonusRows,{onConflict:"participant_id,question_id"});
   if(b.error)return alert(b.error.message);
+  cacheParticipantRows('predictions', pid, [row]);
+  cacheParticipantRows('bonus_answers', pid, bonusRows);
   const i=state.predictions.findIndex(p=>p.participant_id===pid && String(p.match_id)===String(id));
   if(i>=0) state.predictions[i]={...state.predictions[i],...row}; else state.predictions.push(row);
   bonusRows.forEach(br=>{
@@ -1629,6 +1683,8 @@ async function savePredictionGroup(group,btn){
   const jokerRows=matches.map(m=>({participant_id:pid,question_id:`joker_${m.id}`,answer:document.getElementById(`joker-${m.id}`)?.checked?'true':'false'}));
   const jb=await db.from("bonus_answers").upsert(jokerRows,{onConflict:"participant_id,question_id"});
   if(jb.error)return alert(jb.error.message);
+  cacheParticipantRows('predictions', pid, rows);
+  cacheParticipantRows('bonus_answers', pid, jokerRows);
   rows.forEach(row=>{
     const i=state.predictions.findIndex(p=>p.participant_id===row.participant_id && String(p.match_id)===String(row.match_id));
     if(i>=0) state.predictions[i]={...state.predictions[i],...row}; else state.predictions.push(row);
@@ -1651,32 +1707,76 @@ function renderBonus(){
   if(!cur||cur.id==="admin"){document.getElementById("bonusBox").innerHTML=`<div class="notice">Kies eerst je naam bij Invullen.</div>`;return;}
   const ans=participantBonusMap(cur.id);
   const bp=bonusProgress(cur.id);
-  document.getElementById("bonusBox").innerHTML=progressBox('Voortgang bonusvragen', bp.filled, bp.total, 'antwoord per vraag') + bonusQuestions.map(q=>{const v=ans[q.id]||""; const field=q.type==="text"?`<input id="bonus-${q.id}" value="${esc(v)}" placeholder="Vul spelernaam in...">`:`<select id="bonus-${q.id}">${q.options?optionList(q.options,v):countryOptions(v)}</select>`; return `<div class="match"><strong>${q.question}</strong><div class="small">10 punten</div>${field}<button class="save" onclick="saveBonus('${q.id}', this)">Opslaan</button></div>`;}).join("");
+  document.getElementById("bonusBox").innerHTML=
+    progressBox('Voortgang bonusvragen', bp.filled, bp.total, 'antwoord per vraag') +
+    `<div class="notice">Vul je antwoorden in en klik onderaan op <strong>Alle bonusvragen opslaan</strong>. Los per vraag opslaan kan ook.</div>` +
+    bonusQuestions.map(q=>{
+      const v=ans[q.id]||"";
+      const field=q.type==="text"
+        ? `<input id="bonus-${q.id}" value="${esc(v)}" placeholder="Vul spelernaam in...">`
+        : `<select id="bonus-${q.id}">${q.options?optionList(q.options,v):countryOptions(v)}</select>`;
+      return `<div class="match"><strong>${q.question}</strong><div class="small">10 punten</div>${field}<button class="save" onclick="saveBonus('${q.id}', this)">Deze vraag opslaan</button></div>`;
+    }).join("") +
+    `<div class="group-actions"><button class="save" onclick="saveAllBonus(this)">Alle bonusvragen opslaan</button></div>`;
+}
+function collectBonusRows(pid, onlyQid=null){
+  const questions = onlyQid ? bonusQuestions.filter(q=>q.id===onlyQid) : bonusQuestions;
+  return questions.map(q=>{
+    const input=document.getElementById(`bonus-${q.id}`);
+    return {participant_id:pid,question_id:q.id,answer:input ? input.value : ""};
+  });
+}
+function updateLocalBonusState(pid, rows){
+  cacheParticipantRows('bonus_answers', pid, rows);
+  rows.forEach(row=>{
+    const i=state.bonus.findIndex(x=>x.participant_id===pid && x.question_id===row.question_id);
+    if(i>=0) state.bonus[i]={...state.bonus[i],...row};
+    else state.bonus.push(row);
+  });
 }
 async function saveBonus(qid,btn){
   const pid=state.currentParticipant?.id;
-  if(!pid||pid==="admin") return;
+  if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
+  const rows=collectBonusRows(pid, qid);
 
-  const input=document.getElementById(`bonus-${qid}`);
-  const answer=input ? input.value : "";
-  const row={participant_id:pid,question_id:qid,answer};
+  const {data,error}=await db
+    .from("bonus_answers")
+    .upsert(rows,{onConflict:"participant_id,question_id"})
+    .select();
 
-  const {error}=await db.from("bonus_answers").upsert(row,{onConflict:"participant_id,question_id"});
-  if(error) return alert(error.message);
+  if(error) return alert("Bonusvraag niet opgeslagen in Supabase: " + error.message);
+  if(!data || data.length!==rows.length) return alert("Bonusvraag lijkt niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
 
-  // Werk de lokale state direct bij. Niet meteen loadAll() draaien,
-  // want daardoor werd het bonusblok opnieuw opgebouwd en sprong de keuze terug naar leeg.
-  const i=state.bonus.findIndex(x=>x.participant_id===pid && x.question_id===qid);
-  if(i>=0) state.bonus[i]={...state.bonus[i],...row};
-  else state.bonus.push(row);
+  updateLocalBonusState(pid, data);
 
-  // Werk ook direct het totaaloverzicht bij.
-  // Anders staat het antwoord wel opgeslagen, maar zie je het pas na opnieuw laden.
   renderStickyProgress("bonus");
   renderStandings();
   renderOverview();
   markSaved(btn,"Opgeslagen");
-  showToast("✅ Opgeslagen");
+  showToast("✅ Bonusvraag opgeslagen");
+}
+async function saveAllBonus(btn){
+  const pid=state.currentParticipant?.id;
+  if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
+  const rows=collectBonusRows(pid);
+
+  const {data,error}=await db
+    .from("bonus_answers")
+    .upsert(rows,{onConflict:"participant_id,question_id"})
+    .select();
+
+  if(error) return alert("Bonusvragen niet opgeslagen in Supabase: " + error.message);
+  if(!data || data.length!==rows.length) return alert("Bonusvragen lijken niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
+
+  updateLocalBonusState(pid, data);
+
+  renderBonus();
+  renderStickyProgress("bonus");
+  renderStandings();
+  renderOverview();
+  const newBtn=document.querySelector('#bonusBox .group-actions button.save') || btn;
+  markSaved(newBtn,"Alles opgeslagen");
+  showToast("✅ Alle bonusvragen opgeslagen");
 }
 function renderChat(){
   if(!hasAccess()){document.getElementById("chatBox").innerHTML=`<div class="notice">🔒 Je kunt berichten pas lezen en plaatsen na goedkeuring en betaling.</div>`;return;}
