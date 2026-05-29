@@ -1670,8 +1670,11 @@ async function saveBonus(qid,btn){
   if(i>=0) state.bonus[i]={...state.bonus[i],...row};
   else state.bonus.push(row);
 
+  // Werk ook direct het totaaloverzicht bij.
+  // Anders staat het antwoord wel opgeslagen, maar zie je het pas na opnieuw laden.
   renderStickyProgress("bonus");
   renderStandings();
+  renderOverview();
   markSaved(btn,"Opgeslagen");
   showToast("✅ Opgeslagen");
 }
