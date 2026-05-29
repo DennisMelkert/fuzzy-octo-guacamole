@@ -1653,7 +1653,28 @@ function renderBonus(){
   const bp=bonusProgress(cur.id);
   document.getElementById("bonusBox").innerHTML=progressBox('Voortgang bonusvragen', bp.filled, bp.total, 'antwoord per vraag') + bonusQuestions.map(q=>{const v=ans[q.id]||""; const field=q.type==="text"?`<input id="bonus-${q.id}" value="${esc(v)}" placeholder="Vul spelernaam in...">`:`<select id="bonus-${q.id}">${q.options?optionList(q.options,v):countryOptions(v)}</select>`; return `<div class="match"><strong>${q.question}</strong><div class="small">10 punten</div>${field}<button class="save" onclick="saveBonus('${q.id}', this)">Opslaan</button></div>`;}).join("");
 }
-async function saveBonus(qid,btn){const pid=state.currentParticipant?.id;if(!pid||pid==="admin")return;const answer=document.getElementById(`bonus-${qid}`).value; const {error}=await db.from("bonus_answers").upsert({participant_id:pid,question_id:qid,answer},{onConflict:"participant_id,question_id"}); if(error)return alert(error.message); markSaved(btn,"Opgeslagen"); showToast("✅ Opgeslagen"); await loadAll();}
+async function saveBonus(qid,btn){
+  const pid=state.currentParticipant?.id;
+  if(!pid||pid==="admin") return;
+
+  const input=document.getElementById(`bonus-${qid}`);
+  const answer=input ? input.value : "";
+  const row={participant_id:pid,question_id:qid,answer};
+
+  const {error}=await db.from("bonus_answers").upsert(row,{onConflict:"participant_id,question_id"});
+  if(error) return alert(error.message);
+
+  // Werk de lokale state direct bij. Niet meteen loadAll() draaien,
+  // want daardoor werd het bonusblok opnieuw opgebouwd en sprong de keuze terug naar leeg.
+  const i=state.bonus.findIndex(x=>x.participant_id===pid && x.question_id===qid);
+  if(i>=0) state.bonus[i]={...state.bonus[i],...row};
+  else state.bonus.push(row);
+
+  renderStickyProgress("bonus");
+  renderStandings();
+  markSaved(btn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
+}
 function renderChat(){
   if(!hasAccess()){document.getElementById("chatBox").innerHTML=`<div class="notice">🔒 Je kunt berichten pas lezen en plaatsen na goedkeuring en betaling.</div>`;return;}
   const cur=state.currentParticipant;
