@@ -1,3 +1,15 @@
+<!-- v48 update:
+- Supabase is nu de enige bron voor voorspellingen en bonusantwoorden.
+- Lokale backup/localStorage wordt niet meer samengevoegd in schermen of voortgang.
+- Na opslaan wordt alleen data gebruikt die Supabase teruggeeft, zodat iedereen hetzelfde ziet op elk apparaat.
+-->
+
+<!-- v47 update:
+- Poulevoorspellingen geven pas Opgeslagen als Supabase de opgeslagen regels ook teruggeeft.
+- Voorkomt dat deelnemers 72/72 zien door lokale telefoonopslag terwijl beheer/totaaloverzicht niets uit de database kan lezen.
+- Na opslaan wordt het totaaloverzicht direct opnieuw gerenderd.
+-->
+
 <!-- v46 update:
 - Opslaan van bonusvragen geeft pas Opgeslagen als Supabase de opgeslagen regels ook teruggeeft.
 - loadAll controleert nu fouten op alle Supabase-tabellen, niet alleen deelnemers.
@@ -455,42 +467,27 @@ function showToast(message="✅ Opgeslagen"){
 }
 
 
-// Lokale back-up per deelnemer.
-// Dit voorkomt dat ingevulde velden wegvallen als Supabase wel "opgeslagen" teruggeeft,
-// maar de select-policy de nieuwe rij nog niet terugleest of de verbinding kort hapert.
-function localKey(type,pid){return `wk_${type}_${pid}`;}
-function readLocalRows(type,pid){
-  if(!pid) return [];
-  try{return JSON.parse(localStorage.getItem(localKey(type,pid)) || "[]");}catch(e){return [];}
-}
-function writeLocalRows(type,pid,rows){
-  if(!pid) return;
-  localStorage.setItem(localKey(type,pid), JSON.stringify(rows || []));
-}
-function mergeRowsByKey(existing, incoming, keyFn){
-  const map=new Map();
-  (existing||[]).forEach(row=>map.set(keyFn(row), row));
-  (incoming||[]).forEach(row=>map.set(keyFn(row), row));
-  return [...map.values()];
-}
-function cacheParticipantRows(type,pid,rows){
-  if(!pid || pid==='admin') return;
-  const keyFn = type==='predictions'
-    ? (r=>String(r.match_id))
-    : (r=>String(r.question_id));
-  const current=readLocalRows(type,pid);
-  writeLocalRows(type,pid,mergeRowsByKey(current, rows, keyFn));
-}
+// v48: Supabase is de enige bron van waarheid voor voorspellingen en bonusantwoorden.
+// localStorage bewaren we alleen nog voor login/admin-status en de verwijderlijst; niet voor ingevulde uitslagen.
 function getMergedBonusRows(pid){
-  // Supabase-data wint als die bestaat; lokale back-up vult gaten aan.
-  const dbRows=state.bonus.filter(b=>b.participant_id===pid);
-  const localRows=readLocalRows('bonus_answers',pid).map(r=>({...r,participant_id:pid}));
-  return mergeRowsByKey(localRows, dbRows, r=>String(r.question_id));
+  return state.bonus.filter(b=>b.participant_id===pid);
 }
 function getMergedPredictionRows(pid){
-  const dbRows=state.predictions.filter(p=>p.participant_id===pid);
-  const localRows=readLocalRows('predictions',pid).map(r=>({...r,participant_id:pid}));
-  return mergeRowsByKey(localRows, dbRows, r=>String(r.match_id));
+  return state.predictions.filter(p=>p.participant_id===pid);
+}
+function replaceRowsByKey(existing, incoming, keyFn){
+  const incomingKeys = new Set((incoming||[]).map(keyFn));
+  return [
+    ...(existing||[]).filter(row=>!incomingKeys.has(keyFn(row))),
+    ...(incoming||[])
+  ];
+}
+function clearOldLocalParticipantCache(pid){
+  if(!pid || pid==='admin') return;
+  try{
+    localStorage.removeItem(`wk_predictions_${pid}`);
+    localStorage.removeItem(`wk_bonus_answers_${pid}`);
+  }catch(e){}
 }
 
 function deletedParticipantsGlobal(){
@@ -1512,13 +1509,9 @@ async function saveKnockoutResult(id,btn){
 
   if((homeTeam && awayTeam) && homeTeam===awayTeam) return alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
 
-  const row={match_id:String(id),home_goals:h===""?null:Number(h),away_goals:a===""?null:Number(a)};
-  if((row.home_goals!==null && !Number.isInteger(row.home_goals)) || (row.away_goals!==null && !Number.isInteger(row.away_goals))){
-    return alert("Vul alleen hele getallen in bij de uitslag.");
-  }
-  const {data,error}=await db.from("official_results").upsert(row,{onConflict:"match_id"}).select();
+  const row={match_id:String(id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};
+  const {error}=await db.from("official_results").upsert(row,{onConflict:"match_id"});
   if(error)return alert(error.message);
-  if(!data || !data.length) return alert("Uitslag lijkt niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van official_results.");
 
   const bonusRows=[
     {question_id:`official_ko_${id}_home`,answer:homeTeam},
@@ -1567,7 +1560,8 @@ async function autoSaveAdminKnockoutTeamsFromSelect(select){
     renderStandings();
     renderPredictions();
     renderFinals();
-    // Niet renderAdmin() direct na landen kiezen: dat kan nog niet-opgeslagen scorevelden wissen.
+    renderAdmin();
+    showTab('admin');
     showToast('✅ Landen opgeslagen — stand bijgewerkt');
   },250);
 }
@@ -1583,28 +1577,33 @@ async function saveKnockoutPrediction(id,btn){
   if(!homeTeam || !awayTeam) return alert('Kies eerst beide landen voor deze wedstrijd.');
   if(homeTeam===awayTeam) return alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
   const row={participant_id:pid,match_id:String(id),home_goals:h===""?0:parseInt(h,10),away_goals:a===""?0:parseInt(a,10)};
-  const {error}=await db.from("predictions").upsert(row,{onConflict:"participant_id,match_id"});
-  if(error)return alert(error.message);
+  const savedPrediction=await db.from("predictions")
+    .upsert(row,{onConflict:"participant_id,match_id"})
+    .select();
+  if(savedPrediction.error)return alert("Finalevoorspelling niet opgeslagen in Supabase: " + savedPrediction.error.message);
+  if(!savedPrediction.data || savedPrediction.data.length!==1){
+    return alert("Finalevoorspelling is niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van predictions.");
+  }
   const bonusRows=[
     {participant_id:pid,question_id:`ko_${id}_home`,answer:homeTeam},
     {participant_id:pid,question_id:`ko_${id}_away`,answer:awayTeam}
   ];
-  const b=await db.from("bonus_answers").upsert(bonusRows,{onConflict:"participant_id,question_id"});
-  if(b.error)return alert(b.error.message);
-  cacheParticipantRows('predictions', pid, [row]);
-  cacheParticipantRows('bonus_answers', pid, bonusRows);
-  const i=state.predictions.findIndex(p=>p.participant_id===pid && String(p.match_id)===String(id));
-  if(i>=0) state.predictions[i]={...state.predictions[i],...row}; else state.predictions.push(row);
-  bonusRows.forEach(br=>{
-    const j=state.bonus.findIndex(x=>x.participant_id===pid && x.question_id===br.question_id);
-    if(j>=0) state.bonus[j]={...state.bonus[j],...br}; else state.bonus.push(br);
-  });
+  const b=await db.from("bonus_answers")
+    .upsert(bonusRows,{onConflict:"participant_id,question_id"})
+    .select();
+  if(b.error)return alert("Finalelanden niet opgeslagen in Supabase: " + b.error.message);
+  if(!b.data || b.data.length!==bonusRows.length){
+    return alert("Finalelanden zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
+  }
+  clearOldLocalParticipantCache(pid);
+  state.predictions=replaceRowsByKey(state.predictions, savedPrediction.data, p=>`${p.participant_id}_${p.match_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, b.data, x=>`${x.participant_id}_${x.question_id}`);
   renderStandings();
   renderFinals();
   renderStickyProgress("finals");
   const newBtn=document.querySelector(`#finalsBox button[onclick="saveKnockoutPrediction(${id}, this)"]`);
-  markSaved(newBtn||btn,"Voorspelling opgeslagen");
-  showToast("✅ Voorspelling opgeslagen");
+  markSaved(newBtn||btn,"Opgeslagen in Supabase");
+  showToast("✅ Opgeslagen in Supabase");
 }
 
 
@@ -1643,7 +1642,7 @@ function loginWithPassword(){
   renderAll();
   showTab("standings");
 }
-function selectPlayer(id){const p=state.participants.find(x=>x.id===id); state.currentParticipant=p||null; localStorage.setItem("wk_current_participant", JSON.stringify(state.currentParticipant)); renderAll(); if(hasAccess()) showTab("standings");}
+function selectPlayer(id){const p=state.participants.find(x=>x.id===id); state.currentParticipant=p||null; localStorage.setItem("wk_current_participant", JSON.stringify(state.currentParticipant)); if(p) clearOldLocalParticipantCache(p.id); renderAll(); if(hasAccess()) showTab("standings");}
 function jokerInputs(){return [...document.querySelectorAll('.joker-hidden')];}
 function refreshJokerButtons(){
   const inputs=jokerInputs();
@@ -1678,31 +1677,41 @@ function limitJokers(changed){
 async function savePredictionGroup(group,btn){
   const pid=state.currentParticipant?.id; if(!pid||pid==="admin")return alert("Kies eerst je naam.");
   const rows=matches.filter(m=>m.group===group).map(m=>{const h=document.getElementById(`pred-h-${m.id}`).value; const a=document.getElementById(`pred-a-${m.id}`).value; return {participant_id:pid,match_id:String(m.id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};});
-  const {error}=await db.from("predictions").upsert(rows, {onConflict:"participant_id,match_id"});
-  if(error)return alert(error.message);
+
+  // v47: niet alleen lokaal bewaren, maar controleren of Supabase de opgeslagen voorspellingen ook echt teruggeeft.
+  // Als dit faalt, ziet de deelnemer op dezelfde telefoon soms wel 72/72 door localStorage,
+  // maar ziet de beheerder/de totaalpagina de voorspellingen niet.
+  const {data,error}=await db.from("predictions")
+    .upsert(rows, {onConflict:"participant_id,match_id"})
+    .select();
+  if(error)return alert("Voorspellingen niet opgeslagen in Supabase: " + error.message);
+  if(!data || data.length!==rows.length){
+    return alert("Voorspellingen zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van de tabel predictions. Laat deze poule daarna opnieuw opslaan.");
+  }
+
   const allJokerInputs=[...document.querySelectorAll('[id^="joker-"]')];
   const checkedAll=allJokerInputs.filter(x=>x.checked);
   if(checkedAll.length>3){ showToast('⚡ Je mag maximaal 3 jokers inzetten'); return; }
   const jokerRows=matches.map(m=>({participant_id:pid,question_id:`joker_${m.id}`,answer:document.getElementById(`joker-${m.id}`)?.checked?'true':'false'}));
-  const jb=await db.from("bonus_answers").upsert(jokerRows,{onConflict:"participant_id,question_id"});
-  if(jb.error)return alert(jb.error.message);
-  cacheParticipantRows('predictions', pid, rows);
-  cacheParticipantRows('bonus_answers', pid, jokerRows);
-  rows.forEach(row=>{
-    const i=state.predictions.findIndex(p=>p.participant_id===row.participant_id && String(p.match_id)===String(row.match_id));
-    if(i>=0) state.predictions[i]={...state.predictions[i],...row}; else state.predictions.push(row);
-  });
-  jokerRows.forEach(br=>{
-    const j=state.bonus.findIndex(x=>x.participant_id===pid && x.question_id===br.question_id);
-    if(j>=0) state.bonus[j]={...state.bonus[j],...br}; else state.bonus.push(br);
-  });
+  const jb=await db.from("bonus_answers")
+    .upsert(jokerRows,{onConflict:"participant_id,question_id"})
+    .select();
+  if(jb.error)return alert("Jokers niet opgeslagen in Supabase: " + jb.error.message);
+  if(!jb.data || jb.data.length!==jokerRows.length){
+    return alert("Jokers zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
+  }
+
+  clearOldLocalParticipantCache(pid);
+  state.predictions=replaceRowsByKey(state.predictions, data, p=>`${p.participant_id}_${p.match_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, jb.data, x=>`${x.participant_id}_${x.question_id}`);
   renderStandings();
   renderPredictions();
   renderFinals();
+  renderOverview();
   renderStickyProgress("predictions");
   const newBtn=[...document.querySelectorAll('#predictionBox button.save')].find(b=>b.getAttribute('onclick')===`savePredictionGroup('${group}', this)`) || btn;
   markSaved(newBtn,"Poule opgeslagen");
-  showToast("✅ Poule opgeslagen");
+  showToast("✅ Poule opgeslagen in database");
 }
 function renderBonus(){
   if(!hasAccess()){document.getElementById("bonusBox").innerHTML=`<div class="notice">🔒 Je kunt bonusvragen pas invullen na goedkeuring en betaling.</div>`;return;}
@@ -1730,12 +1739,8 @@ function collectBonusRows(pid, onlyQid=null){
   });
 }
 function updateLocalBonusState(pid, rows){
-  cacheParticipantRows('bonus_answers', pid, rows);
-  rows.forEach(row=>{
-    const i=state.bonus.findIndex(x=>x.participant_id===pid && x.question_id===row.question_id);
-    if(i>=0) state.bonus[i]={...state.bonus[i],...row};
-    else state.bonus.push(row);
-  });
+  clearOldLocalParticipantCache(pid);
+  state.bonus=replaceRowsByKey(state.bonus, rows, x=>`${x.participant_id}_${x.question_id}`);
 }
 async function saveBonus(qid,btn){
   const pid=state.currentParticipant?.id;
@@ -1941,26 +1946,11 @@ async function saveOfficialGroup(group,btn){
   const rows=matches.filter(m=>m.group===group).map(m=>{
     const h=document.getElementById(`res-h-${m.id}`).value;
     const a=document.getElementById(`res-a-${m.id}`).value;
-    const home_goals = h==="" ? null : Number(h);
-    const away_goals = a==="" ? null : Number(a);
-    return {match_id:String(m.id),home_goals,away_goals};
+    return {match_id:String(m.id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};
   });
-
-  if(rows.some(r => (r.home_goals!==null && !Number.isInteger(r.home_goals)) || (r.away_goals!==null && !Number.isInteger(r.away_goals)))){
-    return alert("Vul alleen hele getallen in bij de uitslagen.");
-  }
-
-  const {data,error}=await db
-    .from("official_results")
-    .upsert(rows,{onConflict:"match_id"})
-    .select();
-
+  const {error}=await db.from("official_results").upsert(rows,{onConflict:"match_id"});
   if(error)return alert(error.message);
-  if(!data || data.length!==rows.length){
-    return alert("Uitslagen lijken niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van official_results.");
-  }
-
-  data.forEach(row=>{
+  rows.forEach(row=>{
     const i=state.results.findIndex(r=>String(r.match_id)===String(row.match_id));
     if(i>=0) state.results[i]={...state.results[i],...row}; else state.results.push(row);
   });
