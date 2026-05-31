@@ -4,6 +4,12 @@
 - Bonus en finalelanden kiezen bij dubbele records altijd het ingevulde antwoord boven een oude lege waarde.
 -->
 
+<!-- v54 update:
+- Oude account-data wordt nu hard vervangen per sleutel: eerst oude regel(s) verwijderen, daarna nieuwe invoer opslaan.
+- Poulevelden zonder voorspelling starten weer leeg in plaats van 0-0.
+- Dit voorkomt dat oude/lege records na uitloggen of verversen de nieuwe invoer lijken te wissen.
+-->
+
 <!-- v51 update:
 - Beheer officiële poule-uitslagen werkt nu direct ook het tabblad Alle voorspellingen/totaaloverzicht bij.
 - Na opslaan blijft de korte melding ✅ Opgeslagen staan en worden Stand, Invullen, Overzicht en Finales opnieuw berekend vanuit de bijgewerkte state.
@@ -498,6 +504,26 @@ function replaceRowsByKey(existing, incoming, keyFn){
     ...(existing||[]).filter(row=>!incomingKeys.has(keyFn(row))),
     ...(incoming||[])
   ];
+}
+
+// v54: Voor oude accounts verwijderen we eerst bestaande regels voor exact dezelfde sleutels
+// en plaatsen daarna de nieuwe regels terug. Zo kan oude/kapotte data nooit meer de nieuwste
+// invoer overschrijven na uitloggen, verversen of openen op een ander apparaat.
+async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
+  if(!rows || !rows.length) return [];
+  const keys=[...new Set(rows.map(r=>String(r[keyColumn])))] ;
+  const del=await db.from(table).delete().eq('participant_id', pid).in(keyColumn, keys);
+  if(del.error){
+    throw new Error(`${table}: oude regels konden niet worden verwijderd. Zet DELETE-policy aan voor deze tabel. ${del.error.message}`);
+  }
+  const ins=await db.from(table).insert(rows).select();
+  if(ins.error){
+    throw new Error(`${table}: nieuwe regels konden niet worden opgeslagen. ${ins.error.message}`);
+  }
+  if(!ins.data || ins.data.length!==rows.length){
+    throw new Error(`${table}: opgeslagen regels konden niet goed worden teruggelezen. Controleer SELECT-policy.`);
+  }
+  return ins.data;
 }
 function clearOldLocalParticipantCache(pid){
   if(!pid || pid==='admin') return;
@@ -1645,27 +1671,25 @@ async function saveKnockoutPrediction(id,btn){
   if(homeTeam===awayTeam) return alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
   if((h==="" || Number.isNaN(Number(h))) || (a==="" || Number.isNaN(Number(a)))) return alert("Vul eerst beide scores in voor deze finalewedstrijd.");
   const row={participant_id:pid,match_id:String(id),home_goals:parseInt(h,10),away_goals:parseInt(a,10)};
-  const savedPrediction=await db.from("predictions")
-    .upsert(row,{onConflict:"participant_id,match_id"})
-    .select();
-  if(savedPrediction.error)return alert("Finalevoorspelling niet opgeslagen in Supabase: " + savedPrediction.error.message);
-  if(!savedPrediction.data || savedPrediction.data.length!==1){
-    return alert("Finalevoorspelling is niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van predictions.");
+  let savedPredictionData=[];
+  try{
+    savedPredictionData=await replaceParticipantRowsInSupabase("predictions", pid, "match_id", [row]);
+  }catch(e){
+    return alert("Finalevoorspelling niet opgeslagen in Supabase: " + e.message);
   }
   const bonusRows=[
     {participant_id:pid,question_id:`ko_${id}_home`,answer:homeTeam},
     {participant_id:pid,question_id:`ko_${id}_away`,answer:awayTeam}
   ];
-  const b=await db.from("bonus_answers")
-    .upsert(bonusRows,{onConflict:"participant_id,question_id"})
-    .select();
-  if(b.error)return alert("Finalelanden niet opgeslagen in Supabase: " + b.error.message);
-  if(!b.data || b.data.length!==bonusRows.length){
-    return alert("Finalelanden zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
+  let bonusData=[];
+  try{
+    bonusData=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", bonusRows);
+  }catch(e){
+    return alert("Finalelanden niet opgeslagen in Supabase: " + e.message);
   }
   clearOldLocalParticipantCache(pid);
-  state.predictions=replaceRowsByKey(state.predictions, savedPrediction.data, p=>`${p.participant_id}_${p.match_id}`);
-  state.bonus=replaceRowsByKey(state.bonus, b.data, x=>`${x.participant_id}_${x.question_id}`);
+  state.predictions=replaceRowsByKey(state.predictions, savedPredictionData, p=>`${p.participant_id}_${p.match_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, bonusData, x=>`${x.participant_id}_${x.question_id}`);
   renderStandings();
   renderOverview();
   renderFinals();
@@ -1692,7 +1716,7 @@ function renderPredictions(){
     matches.filter(m=>m.group===group).forEach(m=>{
       const p=pred[String(m.id)]||{};
       const isJoker=participantJokers(cur.id).includes(String(m.id));
-      html+=`<div class="match"><div class="small">${m.date} • ${m.time}</div><div class="teams">${teamHTML(m.home)}<span>vs</span>${teamHTML(m.away)}</div><div class="score"><input id="pred-h-${m.id}" type="number" min="0" value="${p.home_goals??0}"><span>-</span><input id="pred-a-${m.id}" type="number" min="0" value="${p.away_goals??0}"></div>${participantMatchPointsHTML(cur.id, m.id, false)}${otherPredictionsHTML(m.id, false)}<div class="joker-row"><input class="joker-hidden" id="joker-${m.id}" type="checkbox" ${isJoker?'checked':''}><button type="button" id="joker-btn-${m.id}" class="joker-btn ${isJoker?'active':''}" onclick="toggleJoker('${m.id}')">⚡ ${isJoker?'Joker actief':'Joker'}</button><span class="joker-help">Maximaal 3 jokers, dubbele punten op deze poulewedstrijd.</span></div></div>`;
+      html+=`<div class="match"><div class="small">${m.date} • ${m.time}</div><div class="teams">${teamHTML(m.home)}<span>vs</span>${teamHTML(m.away)}</div><div class="score"><input id="pred-h-${m.id}" type="number" min="0" value="${p.home_goals??''}"><span>-</span><input id="pred-a-${m.id}" type="number" min="0" value="${p.away_goals??''}"></div>${participantMatchPointsHTML(cur.id, m.id, false)}${otherPredictionsHTML(m.id, false)}<div class="joker-row"><input class="joker-hidden" id="joker-${m.id}" type="checkbox" ${isJoker?'checked':''}><button type="button" id="joker-btn-${m.id}" class="joker-btn ${isJoker?'active':''}" onclick="toggleJoker('${m.id}')">⚡ ${isJoker?'Joker actief':'Joker'}</button><span class="joker-help">Maximaal 3 jokers, dubbele punten op deze poulewedstrijd.</span></div></div>`;
     });
     html += groupButton(group);
   });
@@ -1762,29 +1786,27 @@ async function savePredictionGroup(group,btn){
   // v47: niet alleen lokaal bewaren, maar controleren of Supabase de opgeslagen voorspellingen ook echt teruggeeft.
   // Als dit faalt, ziet de deelnemer op dezelfde telefoon soms wel 72/72 door localStorage,
   // maar ziet de beheerder/de totaalpagina de voorspellingen niet.
-  const {data,error}=await db.from("predictions")
-    .upsert(rowsToSave, {onConflict:"participant_id,match_id"})
-    .select();
-  if(error)return alert("Voorspellingen niet opgeslagen in Supabase: " + error.message);
-  if(!data || data.length!==rowsToSave.length){
-    return alert("Voorspellingen zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van de tabel predictions. Laat deze poule daarna opnieuw opslaan.");
+  let data=[];
+  try{
+    data=await replaceParticipantRowsInSupabase("predictions", pid, "match_id", rowsToSave);
+  }catch(e){
+    return alert("Voorspellingen niet opgeslagen in Supabase: " + e.message);
   }
 
   const allJokerInputs=[...document.querySelectorAll('[id^="joker-"]')];
   const checkedAll=allJokerInputs.filter(x=>x.checked);
   if(checkedAll.length>3){ showToast('⚡ Je mag maximaal 3 jokers inzetten'); return; }
   const jokerRows=matches.map(m=>({participant_id:pid,question_id:`joker_${m.id}`,answer:document.getElementById(`joker-${m.id}`)?.checked?'true':'false'}));
-  const jb=await db.from("bonus_answers")
-    .upsert(jokerRows,{onConflict:"participant_id,question_id"})
-    .select();
-  if(jb.error)return alert("Jokers niet opgeslagen in Supabase: " + jb.error.message);
-  if(!jb.data || jb.data.length!==jokerRows.length){
-    return alert("Jokers zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
+  let jokerData=[];
+  try{
+    jokerData=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", jokerRows);
+  }catch(e){
+    return alert("Jokers niet opgeslagen in Supabase: " + e.message);
   }
 
   clearOldLocalParticipantCache(pid);
   state.predictions=replaceRowsByKey(state.predictions, data, p=>`${p.participant_id}_${p.match_id}`);
-  state.bonus=replaceRowsByKey(state.bonus, jb.data, x=>`${x.participant_id}_${x.question_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, jokerData, x=>`${x.participant_id}_${x.question_id}`);
 
   // Belangrijk: niet de invulpagina opnieuw tekenen na opslaan.
   // Daardoor blijven de zojuist ingevulde velden zichtbaar op telefoon/desktop.
@@ -1835,13 +1857,12 @@ async function saveBonus(qid,btn){
   const rows=collectBonusRows(pid, qid);
   if(!rows.length) return alert("Vul eerst een antwoord in voordat je opslaat.");
 
-  const {data,error}=await db
-    .from("bonus_answers")
-    .upsert(rows,{onConflict:"participant_id,question_id"})
-    .select();
-
-  if(error) return alert("Bonusvraag niet opgeslagen in Supabase: " + error.message);
-  if(!data || data.length!==rows.length) return alert("Bonusvraag lijkt niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
+  let data=[];
+  try{
+    data=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", rows);
+  }catch(e){
+    return alert("Bonusvraag niet opgeslagen in Supabase: " + e.message);
+  }
 
   updateLocalBonusState(pid, data);
 
@@ -1857,13 +1878,12 @@ async function saveAllBonus(btn){
   const rows=collectBonusRows(pid);
   if(!rows.length) return alert("Vul minimaal één bonusvraag in voordat je opslaat.");
 
-  const {data,error}=await db
-    .from("bonus_answers")
-    .upsert(rows,{onConflict:"participant_id,question_id"})
-    .select();
-
-  if(error) return alert("Bonusvragen niet opgeslagen in Supabase: " + error.message);
-  if(!data || data.length!==rows.length) return alert("Bonusvragen lijken niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
+  let data=[];
+  try{
+    data=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", rows);
+  }catch(e){
+    return alert("Bonusvragen niet opgeslagen in Supabase: " + e.message);
+  }
 
   updateLocalBonusState(pid, data);
 
