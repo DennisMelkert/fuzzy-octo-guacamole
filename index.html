@@ -1,3 +1,9 @@
+<!-- v53 update:
+- Oude lege/dubbele records in Supabase overschrijven nieuwe ingevulde voorspellingen niet meer bij uitlezen.
+- Poulewedstrijden slaan alleen compleet ingevulde uitslagen op; lege rijen worden niet opnieuw als voorspelling opgeslagen.
+- Bonus en finalelanden kiezen bij dubbele records altijd het ingevulde antwoord boven een oude lege waarde.
+-->
+
 <!-- v51 update:
 - Beheer officiële poule-uitslagen werkt nu direct ook het tabblad Alle voorspellingen/totaaloverzicht bij.
 - Na opslaan blijft de korte melding ✅ Opgeslagen staan en worden Stand, Invullen, Overzicht en Finales opnieuw berekend vanuit de bijgewerkte state.
@@ -587,9 +593,59 @@ async function loadAll(){
 }
 
 function resultMap(){const map={}; state.results.forEach(r=>map[String(r.match_id)]=r); return map;}
-function predictionMap(pid){const map={}; getMergedPredictionRows(pid).forEach(p=>map[String(p.match_id)]=p); return map;}
-function officialBonusMap(){const map={}; state.officialBonus.forEach(b=>map[b.question_id]=b.answer); return map;}
-function participantBonusMap(pid){const map={}; getMergedBonusRows(pid).forEach(b=>map[b.question_id]=b.answer); return map;}
+
+function predictionFilled(row){
+  return row && row.home_goals!==null && row.home_goals!==undefined && row.home_goals!=='' &&
+         row.away_goals!==null && row.away_goals!==undefined && row.away_goals!=='' &&
+         !Number.isNaN(Number(row.home_goals)) && !Number.isNaN(Number(row.away_goals));
+}
+function newerRow(a,b){
+  const da = new Date(a?.updated_at || a?.created_at || 0).getTime() || 0;
+  const db = new Date(b?.updated_at || b?.created_at || 0).getTime() || 0;
+  return db >= da ? b : a;
+}
+function betterPredictionRow(existing,row){
+  if(!existing) return row;
+  const eFilled=predictionFilled(existing);
+  const rFilled=predictionFilled(row);
+  if(rFilled && !eFilled) return row;
+  if(!rFilled && eFilled) return existing;
+  return newerRow(existing,row);
+}
+function answerFilled(row){
+  return row && row.answer!==null && row.answer!==undefined && String(row.answer).trim()!=='';
+}
+function betterAnswerRow(existing,row){
+  if(!existing) return row;
+  const eFilled=answerFilled(existing);
+  const rFilled=answerFilled(row);
+  if(rFilled && !eFilled) return row;
+  if(!rFilled && eFilled) return existing;
+  return newerRow(existing,row);
+}
+
+function predictionMap(pid){
+  const map={};
+  getMergedPredictionRows(pid).forEach(p=>{
+    const key=String(p.match_id);
+    map[key]=betterPredictionRow(map[key],p);
+  });
+  return map;
+}
+function officialBonusMap(){
+  const rows={};
+  state.officialBonus.forEach(b=>{rows[b.question_id]=betterAnswerRow(rows[b.question_id],b);});
+  const map={};
+  Object.keys(rows).forEach(k=>map[k]=rows[k].answer);
+  return map;
+}
+function participantBonusMap(pid){
+  const rows={};
+  getMergedBonusRows(pid).forEach(b=>{rows[b.question_id]=betterAnswerRow(rows[b.question_id],b);});
+  const map={};
+  Object.keys(rows).forEach(k=>map[k]=rows[k].answer);
+  return map;
+}
 
 function otherPredictionsHTML(matchId, isKnockout=false){
   const approved=state.participants.filter(p=>p.status==="approved" && !participantIsDeleted(p));
@@ -1587,7 +1643,8 @@ async function saveKnockoutPrediction(id,btn){
   const awayTeam=box.querySelector(`#pred-ko-away-${id}`)?.value || '';
   if(!homeTeam || !awayTeam) return alert('Kies eerst beide landen voor deze wedstrijd.');
   if(homeTeam===awayTeam) return alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
-  const row={participant_id:pid,match_id:String(id),home_goals:h===""?0:parseInt(h,10),away_goals:a===""?0:parseInt(a,10)};
+  if((h==="" || Number.isNaN(Number(h))) || (a==="" || Number.isNaN(Number(a)))) return alert("Vul eerst beide scores in voor deze finalewedstrijd.");
+  const row={participant_id:pid,match_id:String(id),home_goals:parseInt(h,10),away_goals:parseInt(a,10)};
   const savedPrediction=await db.from("predictions")
     .upsert(row,{onConflict:"participant_id,match_id"})
     .select();
@@ -1688,16 +1745,28 @@ function limitJokers(changed){
 }
 async function savePredictionGroup(group,btn){
   const pid=state.currentParticipant?.id; if(!pid||pid==="admin")return alert("Kies eerst je naam.");
-  const rows=matches.filter(m=>m.group===group).map(m=>{const h=document.getElementById(`pred-h-${m.id}`).value; const a=document.getElementById(`pred-a-${m.id}`).value; return {participant_id:pid,match_id:String(m.id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};});
+  const rows=matches.filter(m=>m.group===group).map(m=>{
+    const h=document.getElementById(`pred-h-${m.id}`).value;
+    const a=document.getElementById(`pred-a-${m.id}`).value;
+    const hasHome=h!=="" && !Number.isNaN(Number(h));
+    const hasAway=a!=="" && !Number.isNaN(Number(a));
+    if(!hasHome && !hasAway) return null; // oude lege records niet opnieuw opslaan
+    if(hasHome !== hasAway) return {error:true, match:m};
+    return {participant_id:pid,match_id:String(m.id),home_goals:parseInt(h,10),away_goals:parseInt(a,10)};
+  });
+  const invalid=rows.find(r=>r && r.error);
+  if(invalid) return alert(`Vul bij ${invalid.match.home.name} - ${invalid.match.away.name} beide scores in, of laat beide velden leeg.`);
+  const rowsToSave=rows.filter(Boolean);
+  if(!rowsToSave.length) return alert("Vul minimaal één complete uitslag in voordat je opslaat.");
 
   // v47: niet alleen lokaal bewaren, maar controleren of Supabase de opgeslagen voorspellingen ook echt teruggeeft.
   // Als dit faalt, ziet de deelnemer op dezelfde telefoon soms wel 72/72 door localStorage,
   // maar ziet de beheerder/de totaalpagina de voorspellingen niet.
   const {data,error}=await db.from("predictions")
-    .upsert(rows, {onConflict:"participant_id,match_id"})
+    .upsert(rowsToSave, {onConflict:"participant_id,match_id"})
     .select();
   if(error)return alert("Voorspellingen niet opgeslagen in Supabase: " + error.message);
-  if(!data || data.length!==rows.length){
+  if(!data || data.length!==rowsToSave.length){
     return alert("Voorspellingen zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van de tabel predictions. Laat deze poule daarna opnieuw opslaan.");
   }
 
@@ -1751,8 +1820,10 @@ function collectBonusRows(pid, onlyQid=null){
   const questions = onlyQid ? bonusQuestions.filter(q=>q.id===onlyQid) : bonusQuestions;
   return questions.map(q=>{
     const input=document.getElementById(`bonus-${q.id}`);
-    return {participant_id:pid,question_id:q.id,answer:input ? input.value : ""};
-  });
+    const answer=input ? String(input.value || "").trim() : "";
+    if(!answer) return null; // lege oude antwoorden niet opnieuw opslaan
+    return {participant_id:pid,question_id:q.id,answer};
+  }).filter(Boolean);
 }
 function updateLocalBonusState(pid, rows){
   clearOldLocalParticipantCache(pid);
@@ -1762,6 +1833,7 @@ async function saveBonus(qid,btn){
   const pid=state.currentParticipant?.id;
   if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
   const rows=collectBonusRows(pid, qid);
+  if(!rows.length) return alert("Vul eerst een antwoord in voordat je opslaat.");
 
   const {data,error}=await db
     .from("bonus_answers")
@@ -1783,6 +1855,7 @@ async function saveAllBonus(btn){
   const pid=state.currentParticipant?.id;
   if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
   const rows=collectBonusRows(pid);
+  if(!rows.length) return alert("Vul minimaal één bonusvraag in voordat je opslaat.");
 
   const {data,error}=await db
     .from("bonus_answers")
