@@ -1,3 +1,9 @@
+<!-- v55 update:
+- Opslaan gebruikt weer Supabase upsert in plaats van delete + insert.
+- Bestaande bonus/poule/finale regels worden bijgewerkt in plaats van dubbele sleutel fouten te geven.
+- Dit lost oude accounts op die al bonus_answers/predictions records hadden.
+-->
+
 <!-- v53 update:
 - Oude lege/dubbele records in Supabase overschrijven nieuwe ingevulde voorspellingen niet meer bij uitlezen.
 - Poulewedstrijden slaan alleen compleet ingevulde uitslagen op; lege rijen worden niet opnieuw als voorspelling opgeslagen.
@@ -506,24 +512,25 @@ function replaceRowsByKey(existing, incoming, keyFn){
   ];
 }
 
-// v54: Voor oude accounts verwijderen we eerst bestaande regels voor exact dezelfde sleutels
-// en plaatsen daarna de nieuwe regels terug. Zo kan oude/kapotte data nooit meer de nieuwste
-// invoer overschrijven na uitloggen, verversen of openen op een ander apparaat.
+// v55: Niet meer eerst verwijderen en daarna insert doen.
+// Oude accounts hebben al regels met dezelfde participant_id + sleutel.
+// Daarom gebruiken we UPSERT: bestaande regels worden bijgewerkt, nieuwe regels worden aangemaakt.
 async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
   if(!rows || !rows.length) return [];
-  const keys=[...new Set(rows.map(r=>String(r[keyColumn])))] ;
-  const del=await db.from(table).delete().eq('participant_id', pid).in(keyColumn, keys);
-  if(del.error){
-    throw new Error(`${table}: oude regels konden niet worden verwijderd. Zet DELETE-policy aan voor deze tabel. ${del.error.message}`);
+  const conflictColumns = `participant_id,${keyColumn}`;
+
+  const res = await db
+    .from(table)
+    .upsert(rows, { onConflict: conflictColumns })
+    .select();
+
+  if(res.error){
+    throw new Error(`${table}: opslaan/updaten is mislukt. ${res.error.message}`);
   }
-  const ins=await db.from(table).insert(rows).select();
-  if(ins.error){
-    throw new Error(`${table}: nieuwe regels konden niet worden opgeslagen. ${ins.error.message}`);
-  }
-  if(!ins.data || ins.data.length!==rows.length){
+  if(!res.data || res.data.length < rows.length){
     throw new Error(`${table}: opgeslagen regels konden niet goed worden teruggelezen. Controleer SELECT-policy.`);
   }
-  return ins.data;
+  return res.data;
 }
 function clearOldLocalParticipantCache(pid){
   if(!pid || pid==='admin') return;
