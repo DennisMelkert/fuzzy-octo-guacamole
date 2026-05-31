@@ -1,3 +1,8 @@
+<!-- v51 update:
+- Beheer officiële poule-uitslagen werkt nu direct ook het tabblad Alle voorspellingen/totaaloverzicht bij.
+- Na opslaan blijft de korte melding ✅ Opgeslagen staan en worden Stand, Invullen, Overzicht en Finales opnieuw berekend vanuit de bijgewerkte state.
+-->
+
 <!-- v48 update:
 - Supabase is nu de enige bron voor voorspellingen en bonusantwoorden.
 - Lokale backup/localStorage wordt niet meer samengevoegd in schermen of voortgang.
@@ -1967,8 +1972,10 @@ async function saveOfficialGroup(group,btn){
   });
   renderStandings();
   renderPredictions();
-  renderAdmin();
+  renderOverview();
   renderFinals();
+  renderAdmin();
+  renderStickyProgress(window.currentTab || "admin");
   const newBtn=[...document.querySelectorAll('#adminPanel button.save')].find(b=>b.textContent.includes(`Uitslagen ${groupOrderName(group)} opslaan`)) || btn;
   markSaved(newBtn,"Opgeslagen");
   showToast("✅ Opgeslagen");
