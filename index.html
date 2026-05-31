@@ -1512,9 +1512,13 @@ async function saveKnockoutResult(id,btn){
 
   if((homeTeam && awayTeam) && homeTeam===awayTeam) return alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
 
-  const row={match_id:String(id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};
-  const {error}=await db.from("official_results").upsert(row,{onConflict:"match_id"});
+  const row={match_id:String(id),home_goals:h===""?null:Number(h),away_goals:a===""?null:Number(a)};
+  if((row.home_goals!==null && !Number.isInteger(row.home_goals)) || (row.away_goals!==null && !Number.isInteger(row.away_goals))){
+    return alert("Vul alleen hele getallen in bij de uitslag.");
+  }
+  const {data,error}=await db.from("official_results").upsert(row,{onConflict:"match_id"}).select();
   if(error)return alert(error.message);
+  if(!data || !data.length) return alert("Uitslag lijkt niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van official_results.");
 
   const bonusRows=[
     {question_id:`official_ko_${id}_home`,answer:homeTeam},
@@ -1563,8 +1567,7 @@ async function autoSaveAdminKnockoutTeamsFromSelect(select){
     renderStandings();
     renderPredictions();
     renderFinals();
-    renderAdmin();
-    showTab('admin');
+    // Niet renderAdmin() direct na landen kiezen: dat kan nog niet-opgeslagen scorevelden wissen.
     showToast('✅ Landen opgeslagen — stand bijgewerkt');
   },250);
 }
@@ -1938,11 +1941,26 @@ async function saveOfficialGroup(group,btn){
   const rows=matches.filter(m=>m.group===group).map(m=>{
     const h=document.getElementById(`res-h-${m.id}`).value;
     const a=document.getElementById(`res-a-${m.id}`).value;
-    return {match_id:String(m.id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};
+    const home_goals = h==="" ? null : Number(h);
+    const away_goals = a==="" ? null : Number(a);
+    return {match_id:String(m.id),home_goals,away_goals};
   });
-  const {error}=await db.from("official_results").upsert(rows,{onConflict:"match_id"});
+
+  if(rows.some(r => (r.home_goals!==null && !Number.isInteger(r.home_goals)) || (r.away_goals!==null && !Number.isInteger(r.away_goals)))){
+    return alert("Vul alleen hele getallen in bij de uitslagen.");
+  }
+
+  const {data,error}=await db
+    .from("official_results")
+    .upsert(rows,{onConflict:"match_id"})
+    .select();
+
   if(error)return alert(error.message);
-  rows.forEach(row=>{
+  if(!data || data.length!==rows.length){
+    return alert("Uitslagen lijken niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van official_results.");
+  }
+
+  data.forEach(row=>{
     const i=state.results.findIndex(r=>String(r.match_id)===String(row.match_id));
     if(i>=0) state.results[i]={...state.results[i],...row}; else state.results.push(row);
   });
