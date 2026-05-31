@@ -10,10 +10,10 @@
 - Na opslaan wordt het totaaloverzicht direct opnieuw gerenderd.
 -->
 
-<!-- v49 update:
-- Opslaan leest nu direct opnieuw uit Supabase voordat de knop groen wordt.
-- Totaaloverzicht gebruikt na opslaan dezelfde verse database-data als alle apparaten.
-- Als Supabase insert/update wel lukt maar teruglezen niet, krijgt de gebruiker een duidelijke melding over RLS SELECT-policy.
+<!-- v50 update:
+- Supabase blijft de enige bron voor voorspellingen en bonusantwoorden.
+- Na opslaan blijven de ingevulde velden zichtbaar; alleen state/stand/overzicht worden bijgewerkt.
+- De melding bovenin is weer kort: ✅ Opgeslagen.
 -->
 
 <!-- v46 update:
@@ -494,25 +494,6 @@ function clearOldLocalParticipantCache(pid){
     localStorage.removeItem(`wk_predictions_${pid}`);
     localStorage.removeItem(`wk_bonus_answers_${pid}`);
   }catch(e){}
-}
-
-// v49: na opslaan altijd opnieuw vanuit Supabase lezen.
-// Daardoor is Supabase echt de enige bron en ziet elk apparaat hetzelfde.
-async function reloadFromSupabaseOrWarn(context='gegevens'){
-  await loadAll();
-  const pid = state.currentParticipant?.id;
-  if(!pid || pid==='admin') return true;
-  const readablePredictions = state.predictions.filter(p=>p.participant_id===pid).length;
-  const readableBonus = state.bonus.filter(b=>b.participant_id===pid).length;
-  if(context==='predictions' && readablePredictions===0){
-    alert('Opgeslagen, maar na opnieuw laden kan deze gebruiker geen voorspellingen uit Supabase teruglezen. Controleer Supabase RLS SELECT-policy voor predictions.');
-    return false;
-  }
-  if(context==='bonus' && readableBonus===0){
-    alert('Opgeslagen, maar na opnieuw laden kan deze gebruiker geen bonusantwoorden uit Supabase teruglezen. Controleer Supabase RLS SELECT-policy voor bonus_answers.');
-    return false;
-  }
-  return true;
 }
 
 function deletedParticipantsGlobal(){
@@ -1621,11 +1602,15 @@ async function saveKnockoutPrediction(id,btn){
     return alert("Finalelanden zijn niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
   }
   clearOldLocalParticipantCache(pid);
-  await reloadFromSupabaseOrWarn('predictions');
-  showTab('finals');
+  state.predictions=replaceRowsByKey(state.predictions, savedPrediction.data, p=>`${p.participant_id}_${p.match_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, b.data, x=>`${x.participant_id}_${x.question_id}`);
+  renderStandings();
+  renderOverview();
+  renderFinals();
+  renderStickyProgress("finals");
   const newBtn=document.querySelector(`#finalsBox button[onclick="saveKnockoutPrediction(${id}, this)"]`);
   markSaved(newBtn||btn,"Opgeslagen");
-  showToast("✅ Finale opgeslagen en teruggelezen uit Supabase");
+  showToast("✅ Opgeslagen");
 }
 
 
@@ -1724,12 +1709,20 @@ async function savePredictionGroup(group,btn){
   }
 
   clearOldLocalParticipantCache(pid);
-  await reloadFromSupabaseOrWarn('predictions');
-  showTab('predictions');
+  state.predictions=replaceRowsByKey(state.predictions, data, p=>`${p.participant_id}_${p.match_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, jb.data, x=>`${x.participant_id}_${x.question_id}`);
+
+  // Belangrijk: niet de invulpagina opnieuw tekenen na opslaan.
+  // Daardoor blijven de zojuist ingevulde velden zichtbaar op telefoon/desktop.
+  // We werken wel direct de state, stand, voortgang en totaaloverzicht bij met Supabase-data.
+  renderStandings();
   renderOverview();
+  renderStickyProgress("predictions");
+  if(window.currentTab==='finals') renderFinals();
+
   const newBtn=[...document.querySelectorAll('#predictionBox button.save')].find(b=>b.getAttribute('onclick')===`savePredictionGroup('${group}', this)`) || btn;
-  markSaved(newBtn,"Poule opgeslagen");
-  showToast("✅ Poule opgeslagen en teruggelezen uit Supabase");
+  markSaved(newBtn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
 }
 function renderBonus(){
   if(!hasAccess()){document.getElementById("bonusBox").innerHTML=`<div class="notice">🔒 Je kunt bonusvragen pas invullen na goedkeuring en betaling.</div>`;return;}
@@ -1773,11 +1766,13 @@ async function saveBonus(qid,btn){
   if(error) return alert("Bonusvraag niet opgeslagen in Supabase: " + error.message);
   if(!data || data.length!==rows.length) return alert("Bonusvraag lijkt niet goed terug te lezen uit Supabase. Controleer de RLS/select-policy van bonus_answers.");
 
-  clearOldLocalParticipantCache(pid);
-  await reloadFromSupabaseOrWarn('bonus');
-  showTab('bonus');
+  updateLocalBonusState(pid, data);
+
+  renderStickyProgress("bonus");
+  renderStandings();
+  renderOverview();
   markSaved(btn,"Opgeslagen");
-  showToast("✅ Bonusvraag opgeslagen en teruggelezen uit Supabase");
+  showToast("✅ Opgeslagen");
 }
 async function saveAllBonus(btn){
   const pid=state.currentParticipant?.id;
@@ -1799,8 +1794,8 @@ async function saveAllBonus(btn){
   renderStandings();
   renderOverview();
   const newBtn=document.querySelector('#bonusBox .group-actions button.save') || btn;
-  markSaved(newBtn,"Alles opgeslagen");
-  showToast("✅ Alle bonusvragen opgeslagen");
+  markSaved(newBtn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
 }
 function renderChat(){
   if(!hasAccess()){document.getElementById("chatBox").innerHTML=`<div class="notice">🔒 Je kunt berichten pas lezen en plaatsen na goedkeuring en betaling.</div>`;return;}
