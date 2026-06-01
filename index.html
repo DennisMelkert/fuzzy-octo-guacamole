@@ -1,6 +1,6 @@
-<!-- v62 update:
-- Supabase laadfix: loadAll haalt nu per tabel tot 5000 regels op met .range(0, 5000).
-- Hierdoor blijven bonusvragen, poulewedstrijden, finalewedstrijden, officiële uitslagen en overzicht na refresh zichtbaar voor alle deelnemers.
+<!-- v63 update:
+- Grote Supabase-tabellen worden nu gepagineerd opgehaald in blokken van 1000 regels.
+- Fix voor ontbrekende bonusantwoorden/poule/finale-data na refresh wanneer de database boven de API-limiet komt.
 -->
 
 <!-- v59 update:
@@ -596,16 +596,45 @@ function markSaved(btn,text="Opgeslagen"){
   btn.textContent=text;
 }
 
+// v63: Supabase geeft standaard/maximaal maar een beperkt aantal rijen per request terug.
+// Daarom halen we grote tabellen nu in pagina's van 1000 op, totdat alles binnen is.
+async function fetchAllRows(table, orderColumn="id", ascending=true){
+  const pageSize = 1000;
+  let from = 0;
+  let all = [];
+
+  while(true){
+    const res = await db
+      .from(table)
+      .select("*")
+      .order(orderColumn, {ascending})
+      .range(from, from + pageSize - 1);
+
+    if(res.error) return {data: all, error: res.error};
+
+    const rows = res.data || [];
+    all = all.concat(rows);
+
+    if(rows.length < pageSize) break;
+    from += pageSize;
+
+    // Veiligheidsstop tegen oneindige loops bij onverwachte API-responses.
+    if(from > 50000) break;
+  }
+
+  return {data: all, error: null};
+}
+
 async function loadAll(){
   try{
     const [p, pr, r, b, ob, msg, set] = await Promise.all([
-      db.from("participants").select("*").order("created_at").range(0, 5000),
-      db.from("predictions").select("*").range(0, 5000),
-      db.from("official_results").select("*").range(0, 5000),
-      db.from("bonus_answers").select("*").range(0, 5000),
-      db.from("official_bonus_answers").select("*").range(0, 5000),
-      db.from("messages").select("*").order("created_at", {ascending:false}).range(0, 5000),
-      db.from("app_settings").select("*").range(0, 5000)
+      fetchAllRows("participants", "created_at", true),
+      fetchAllRows("predictions", "id", true),
+      fetchAllRows("official_results", "id", true),
+      fetchAllRows("bonus_answers", "id", true),
+      fetchAllRows("official_bonus_answers", "id", true),
+      db.from("messages").select("*").order("created_at", {ascending:false}).limit(80),
+      db.from("app_settings").select("*")
     ]);
     const loadError = [p, pr, r, b, ob, msg, set].find(x=>x && x.error)?.error;
     if(loadError) throw loadError;
