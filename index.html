@@ -1,3 +1,8 @@
+<!-- v62 update:
+- Supabase laadfix: loadAll haalt nu per tabel tot 5000 regels op met .range(0, 5000).
+- Hierdoor blijven bonusvragen, poulewedstrijden, finalewedstrijden, officiële uitslagen en overzicht na refresh zichtbaar voor alle deelnemers.
+-->
+
 <!-- v59 update:
 - Algemene opslagfix voor oude accounts: poule, finales, jokers en bonus gebruiken nu upsert in plaats van delete + insert.
 - Bestaande lege records worden bijgewerkt in plaats van dat opslaan faalt of leeg terugkomt.
@@ -594,13 +599,13 @@ function markSaved(btn,text="Opgeslagen"){
 async function loadAll(){
   try{
     const [p, pr, r, b, ob, msg, set] = await Promise.all([
-      db.from("participants").select("*").order("created_at"),
-      db.from("predictions").select("*"),
-      db.from("official_results").select("*"),
-      db.from("bonus_answers").select("*"),
-      db.from("official_bonus_answers").select("*"),
-      db.from("messages").select("*").order("created_at", {ascending:false}).limit(80),
-      db.from("app_settings").select("*")
+      db.from("participants").select("*").order("created_at").range(0, 5000),
+      db.from("predictions").select("*").range(0, 5000),
+      db.from("official_results").select("*").range(0, 5000),
+      db.from("bonus_answers").select("*").range(0, 5000),
+      db.from("official_bonus_answers").select("*").range(0, 5000),
+      db.from("messages").select("*").order("created_at", {ascending:false}).range(0, 5000),
+      db.from("app_settings").select("*").range(0, 5000)
     ]);
     const loadError = [p, pr, r, b, ob, msg, set].find(x=>x && x.error)?.error;
     if(loadError) throw loadError;
