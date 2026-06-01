@@ -1,9 +1,3 @@
-<!-- v60 update:
-- Opslaan controleert nu per sleutel of Supabase exact de nieuwe waarde teruggeeft.
-- Als upsert bij oude accounts geen bestaande lege rij bijwerkt, volgt automatisch een gerichte update per regel.
-- Lege velden worden niet als nieuwe voorspelling opgeslagen, maar ingevulde oude lege records worden nu aantoonbaar overschreven.
--->
-
 <!-- v59 update:
 - Algemene opslagfix voor oude accounts: poule, finales, jokers en bonus gebruiken nu upsert in plaats van delete + insert.
 - Bestaande lege records worden bijgewerkt in plaats van dat opslaan faalt of leeg terugkomt.
@@ -521,25 +515,6 @@ function replaceRowsByKey(existing, incoming, keyFn){
 // v59: Algemene opslag voor oude én nieuwe accounts.
 // Niet verwijderen + invoegen, maar upsert: bestaande regels worden bijgewerkt,
 // nieuwe regels worden aangemaakt. Dit voorkomt problemen bij oude lege records.
-async function normalizeForCompare(v){
-  if(v===null || v===undefined) return '';
-  return String(v).trim();
-}
-function rowMatchesExpected(table, expected, actual, keyColumn){
-  if(!actual) return false;
-  if(table==='predictions'){
-    return normalizeForCompare(actual.home_goals)===normalizeForCompare(expected.home_goals) &&
-           normalizeForCompare(actual.away_goals)===normalizeForCompare(expected.away_goals);
-  }
-  if(table==='bonus_answers' || table==='official_bonus_answers'){
-    return normalizeForCompare(actual.answer)===normalizeForCompare(expected.answer);
-  }
-  if(table==='official_results'){
-    return normalizeForCompare(actual.home_goals)===normalizeForCompare(expected.home_goals) &&
-           normalizeForCompare(actual.away_goals)===normalizeForCompare(expected.away_goals);
-  }
-  return true;
-}
 async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
   if(!rows || !rows.length) return [];
   const cleanRows = rows.map(row => ({...row, participant_id: pid}));
@@ -547,7 +522,6 @@ async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
     ? 'participant_id,match_id'
     : 'participant_id,question_id';
 
-  // Stap 1: normale upsert. Dit werkt voor nieuwe accounts én hoort bestaande regels bij te werken.
   const saved = await db
     .from(table)
     .upsert(cleanRows, { onConflict: conflictTarget })
@@ -557,71 +531,17 @@ async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
     throw new Error(`${table}: opslaan/updaten is mislukt. ${saved.error.message}`);
   }
 
-  const keys = [...new Set(cleanRows.map(r => String(r[keyColumn])))] ;
+  const keys = [...new Set(cleanRows.map(r => String(r[keyColumn])))];
+  const verify = await db
+    .from(table)
+    .select('*')
+    .eq('participant_id', pid)
+    .in(keyColumn, keys);
 
-  async function fetchVerifyRows(){
-    const verify = await db
-      .from(table)
-      .select('*')
-      .eq('participant_id', pid)
-      .in(keyColumn, keys);
-    if(verify.error){
-      throw new Error(`${table}: controle na opslaan mislukt. ${verify.error.message}`);
-    }
-    return verify.data || [];
+  if(verify.error){
+    throw new Error(`${table}: controle na opslaan mislukt. ${verify.error.message}`);
   }
-
-  // Stap 2: controleer niet alleen aantallen, maar ook of de opgeslagen waarden exact overeenkomen.
-  let verifyRows = await fetchVerifyRows();
-  let verifyMap = {};
-  verifyRows.forEach(r=>{ verifyMap[String(r[keyColumn])] = r; });
-
-  const missingOrWrong = cleanRows.filter(row=>{
-    const key=String(row[keyColumn]);
-    return !rowMatchesExpected(table, row, verifyMap[key], keyColumn);
-  });
-
-  // Stap 3: oude accounts kunnen al een lege rij hebben. Als upsert die niet goed heeft bijgewerkt,
-  // forceer dan per regel een update op participant_id + keyColumn.
-  for(const row of missingOrWrong){
-    const key=String(row[keyColumn]);
-    const updatePayload={...row};
-    delete updatePayload.participant_id;
-    delete updatePayload[keyColumn];
-
-    const upd = await db
-      .from(table)
-      .update(updatePayload)
-      .eq('participant_id', pid)
-      .eq(keyColumn, key)
-      .select();
-
-    if(upd.error){
-      throw new Error(`${table}: bestaande regel ${key} kon niet worden bijgewerkt. Controleer UPDATE-policy. ${upd.error.message}`);
-    }
-
-    // Als er nog geen rij bestond, maak hem alsnog aan.
-    if(!upd.data || !upd.data.length){
-      const ins = await db.from(table).insert(row).select();
-      if(ins.error){
-        throw new Error(`${table}: nieuwe regel ${key} kon niet worden aangemaakt. Controleer INSERT-policy. ${ins.error.message}`);
-      }
-    }
-  }
-
-  verifyRows = await fetchVerifyRows();
-  verifyMap = {};
-  verifyRows.forEach(r=>{ verifyMap[String(r[keyColumn])] = r; });
-
-  const stillWrong = cleanRows.filter(row=>{
-    const key=String(row[keyColumn]);
-    return !rowMatchesExpected(table, row, verifyMap[key], keyColumn);
-  });
-  if(stillWrong.length){
-    throw new Error(`${table}: ${stillWrong.length} regel(s) staan na opslaan nog niet goed in Supabase. Meestal ontbreekt UPDATE-policy of SELECT-policy.`);
-  }
-
-  return verifyRows.filter(r=>keys.includes(String(r[keyColumn])));
+  return verify.data || [];
 }
 function clearOldLocalParticipantCache(pid){
   if(!pid || pid==='admin') return;
