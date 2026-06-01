@@ -665,7 +665,8 @@ function betterAnswerRow(existing,row){
   const rFilled=answerFilled(row);
   if(rFilled && !eFilled) return row;
   if(!rFilled && eFilled) return existing;
-  return newerRow(existing,row);
+  if(rFilled && eFilled) return newerRow(existing,row);
+  return existing;
 }
 
 function predictionMap(pid){
