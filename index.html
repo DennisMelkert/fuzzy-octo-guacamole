@@ -685,10 +685,15 @@ function officialBonusMap(){
   return map;
 }
 function participantBonusMap(pid){
-  const rows={};
-  getMergedBonusRows(pid).forEach(b=>{rows[b.question_id]=betterAnswerRow(rows[b.question_id],b);});
   const map={};
-  Object.keys(rows).forEach(k=>map[k]=rows[k].answer);
+  getMergedBonusRows(pid).forEach(b=>{
+    const qid=b.question_id;
+    const newAnswer=b.answer!=null && String(b.answer).trim()!=='' ? String(b.answer).trim() : null;
+    const existing=map[qid];
+    if(!existing && newAnswer) map[qid]=newAnswer;
+    else if(existing && !newAnswer) map[qid]=existing;
+    else if(newAnswer) map[qid]=newAnswer;
+  });
   return map;
 }
 
