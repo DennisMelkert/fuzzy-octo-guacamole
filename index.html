@@ -1,13 +1,19 @@
+<!-- v58 update:
+- Opslaan van oude accounts gebruikt weer echte upsert in plaats van delete+insert.
+- Bestaande bonusvragen, poulewedstrijden, jokers en finales worden bijgewerkt in Supabase.
+- Nieuwe antwoorden moeten na verversen zichtbaar blijven.
+-->
+
 <!-- v53 update:
 - Oude lege/dubbele records in Supabase overschrijven nieuwe ingevulde voorspellingen niet meer bij uitlezen.
 - Poulewedstrijden slaan alleen compleet ingevulde uitslagen op; lege rijen worden niet opnieuw als voorspelling opgeslagen.
 - Bonus en finalelanden kiezen bij dubbele records altijd het ingevulde antwoord boven een oude lege waarde.
 -->
 
-<!-- v57 update:
-- Opslaan gebruikt weer veilige UPSERT voor bestaande én nieuwe regels.
-- Oude deelnemers zoals Dennis krijgen bestaande bonus/poule/finale-records bijgewerkt in plaats van insert-fouten of delete-problemen.
-- Geen lege bonusantwoorden opslaan; ingevulde bonusvragen blijven in Supabase zichtbaar na refresh.
+<!-- v54 update:
+- Oude account-data wordt nu hard vervangen per sleutel: eerst oude regel(s) verwijderen, daarna nieuwe invoer opslaan.
+- Poulevelden zonder voorspelling starten weer leeg in plaats van 0-0.
+- Dit voorkomt dat oude/lege records na uitloggen of verversen de nieuwe invoer lijken te wissen.
 -->
 
 <!-- v51 update:
@@ -506,28 +512,26 @@ function replaceRowsByKey(existing, incoming, keyFn){
   ];
 }
 
-// v57: Altijd UPSERT gebruiken. Niet eerst verwijderen.
-// Oude accounts hebben al regels in Supabase; met insert/delete kan dat misgaan.
-// Upsert werkt voor nieuw én bestaand: bestaande regel wordt bijgewerkt, nieuwe regel wordt aangemaakt.
+// v58: Oude accounts worden NIET meer delete+insert opgeslagen.
+// Dat gaf problemen bij bestaande bonusvragen/voorspellingen. We gebruiken altijd upsert,
+// zodat bestaande regels worden bijgewerkt en nieuwe regels worden aangemaakt.
 async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
   if(!rows || !rows.length) return [];
-
-  const conflictColumns = table === "predictions"
-    ? "participant_id,match_id"
-    : "participant_id,question_id";
-
-  const {data, error} = await db
-    .from(table)
-    .upsert(rows, {onConflict: conflictColumns})
+  const conflictMap={
+    predictions: 'participant_id,match_id',
+    bonus_answers: 'participant_id,question_id'
+  };
+  const onConflict=conflictMap[table] || `participant_id,${keyColumn}`;
+  const saved=await db.from(table)
+    .upsert(rows,{onConflict})
     .select();
-
-  if(error){
-    throw new Error(`${table}: opslaan/updaten mislukt. ${error.message}`);
+  if(saved.error){
+    throw new Error(`${table}: regels konden niet worden opgeslagen. ${saved.error.message}`);
   }
-  if(!data || data.length!==rows.length){
+  if(!saved.data || saved.data.length!==rows.length){
     throw new Error(`${table}: opgeslagen regels konden niet goed worden teruggelezen. Controleer SELECT-policy.`);
   }
-  return data;
+  return saved.data;
 }
 function clearOldLocalParticipantCache(pid){
   if(!pid || pid==='admin') return;
