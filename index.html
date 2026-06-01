@@ -518,29 +518,35 @@ function replaceRowsByKey(existing, incoming, keyFn){
 async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
   if(!rows || !rows.length) return [];
   const cleanRows = rows.map(row => ({...row, participant_id: pid}));
-  const conflictTarget = keyColumn === 'match_id'
-    ? 'participant_id,match_id'
-    : 'participant_id,question_id';
 
-  const saved = await db
-    .from(table)
-    .upsert(cleanRows, { onConflict: conflictTarget })
-    .select();
-
-  if(saved.error){
-    throw new Error(`${table}: opslaan/updaten is mislukt. ${saved.error.message}`);
-  }
-
+  // Haal bestaande keys op voor deze deelnemer
   const keys = [...new Set(cleanRows.map(r => String(r[keyColumn])))];
-  const verify = await db
-    .from(table)
-    .select('*')
-    .eq('participant_id', pid)
-    .in(keyColumn, keys);
+  const existing = await db.from(table).select(keyColumn).eq('participant_id', pid).in(keyColumn, keys);
+  if(existing.error) throw new Error(`${table}: ophalen mislukt. ${existing.error.message}`);
 
-  if(verify.error){
-    throw new Error(`${table}: controle na opslaan mislukt. ${verify.error.message}`);
+  const existingKeys = new Set((existing.data || []).map(r => String(r[keyColumn])));
+  const toUpdate = cleanRows.filter(r => existingKeys.has(String(r[keyColumn])));
+  const toInsert = cleanRows.filter(r => !existingKeys.has(String(r[keyColumn])));
+
+  // Update bestaande rijen één voor één
+  for(const row of toUpdate){
+    const updateData = {...row};
+    delete updateData.participant_id;
+    delete updateData[keyColumn];
+    updateData.updated_at = new Date().toISOString();
+    const res = await db.from(table).update(updateData).eq('participant_id', pid).eq(keyColumn, String(row[keyColumn]));
+    if(res.error) throw new Error(`${table}: update mislukt voor ${row[keyColumn]}. ${res.error.message}`);
   }
+
+  // Insert nieuwe rijen
+  if(toInsert.length){
+    const res = await db.from(table).insert(toInsert);
+    if(res.error) throw new Error(`${table}: insert mislukt. ${res.error.message}`);
+  }
+
+  // Haal alles opnieuw op
+  const verify = await db.from(table).select('*').eq('participant_id', pid).in(keyColumn, keys);
+  if(verify.error) throw new Error(`${table}: controle na opslaan mislukt. ${verify.error.message}`);
   return verify.data || [];
 }
 function clearOldLocalParticipantCache(pid){
