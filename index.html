@@ -1,3 +1,7 @@
+<!-- v64 update:
+- Live fix poule invullen: bovenste voortgangsbalk en voorspelde poulestand rekenen nu direct met actuele inputvelden, nog vóór opslaan.
+-->
+
 <!-- v63 update:
 - Grote Supabase-tabellen worden nu gepagineerd opgehaald in blokken van 1000 regels.
 - Fix voor ontbrekende bonusantwoorden/poule/finale-data na refresh wanneer de database boven de API-limiet komt.
@@ -1496,7 +1500,7 @@ function renderStickyProgress(tab=window.currentTab){
     el.innerHTML='';
     return;
   }
-  const data = tab==='predictions' ? predictionProgress(pid) : tab==='finals' ? finalsProgress(pid) : bonusProgress(pid);
+  const data = tab==='predictions' ? predictionProgressLive(pid) : tab==='finals' ? finalsProgress(pid) : bonusProgress(pid);
   const label = tab==='predictions' ? 'Poulewedstrijden' : tab==='finals' ? 'Finaleschema' : 'Bonus';
   el.innerHTML=stickyProgressHTML(label, data.filled, data.total);
   el.classList.remove('hidden');
@@ -1508,6 +1512,57 @@ function predictionProgress(pid){
     return p && p.home_goals!=null && p.away_goals!=null;
   }).length;
   return {filled,total:matches.length};
+}
+
+// v64 live fix: tijdens het typen moeten de bovenste voortgang en de voorspelde poulestand
+// niet wachten op Supabase/state, maar rekenen met de actuele inputvelden op het scherm.
+function livePredictionMap(pid){
+  const map={...predictionMap(pid)};
+  if(!pid || pid==='admin') return map;
+  matches.forEach(m=>{
+    const hEl=document.getElementById(`pred-h-${m.id}`);
+    const aEl=document.getElementById(`pred-a-${m.id}`);
+    if(!hEl || !aEl) return;
+    const h=hEl.value;
+    const a=aEl.value;
+    const complete = h!=='' && a!=='' && !Number.isNaN(Number(h)) && !Number.isNaN(Number(a));
+    if(complete){
+      map[String(m.id)]={participant_id:pid, match_id:String(m.id), home_goals:parseInt(h,10), away_goals:parseInt(a,10)};
+    }else{
+      delete map[String(m.id)];
+    }
+  });
+  return map;
+}
+function predictionProgressLive(pid){
+  const pred=livePredictionMap(pid);
+  const filled=matches.filter(m=>{
+    const p=pred[String(m.id)];
+    return p && p.home_goals!==null && p.home_goals!==undefined && p.home_goals!=='' &&
+           p.away_goals!==null && p.away_goals!==undefined && p.away_goals!=='' &&
+           !Number.isNaN(Number(p.home_goals)) && !Number.isNaN(Number(p.away_goals));
+  }).length;
+  return {filled,total:matches.length};
+}
+function getLivePredictionGroupStandings(group, participantId){
+  return getGroupStandingsFromMap(group, livePredictionMap(participantId));
+}
+function predictionGroupDomId(group){
+  return `prediction-standing-${groupCode(group)}`;
+}
+function livePredictionChanged(){
+  const pid=state.currentParticipant?.id;
+  if(!pid || pid==='admin') return;
+  const top=document.getElementById('predictionProgressTop');
+  if(top){
+    const pp=predictionProgressLive(pid);
+    top.innerHTML=progressBox('Voortgang poulewedstrijden', pp.filled, pp.total, 'uitslag per wedstrijd');
+  }
+  allGroups().forEach(group=>{
+    const el=document.getElementById(predictionGroupDomId(group));
+    if(el) el.innerHTML=renderGroupStandings(group, getLivePredictionGroupStandings(group, pid));
+  });
+  renderStickyProgress('predictions');
 }
 function knockoutMatchIds(){
   return [...knockoutFirstRound.map(f=>f.id), ...knockoutNextRounds.flatMap(r=>r.fixtures.map(f=>f.id))];
@@ -1774,13 +1829,13 @@ function renderPredictions(){
   if(!cur||cur.id==="admin"){document.getElementById("predictionBox").innerHTML=`<div class="notice">Log eerst in als deelnemer.</div>`;return;}
   const pred=predictionMap(cur.id);
   const pp=predictionProgress(cur.id);
-  let html=progressBox('Voortgang poulewedstrijden', pp.filled, pp.total, 'uitslag per wedstrijd') + `<div class="notice">Je vult voorspellingen in als <strong>${esc(cur.name)}</strong>.</div>`;
+  let html=`<div id="predictionProgressTop">${progressBox('Voortgang poulewedstrijden', pp.filled, pp.total, 'uitslag per wedstrijd')}</div>` + `<div class="notice">Je vult voorspellingen in als <strong>${esc(cur.name)}</strong>.</div>`;
   allGroups().forEach(group=>{
-    html+=`<div class="group-title">${groupOrderName(group)}</div>${renderGroupStandings(group, getPredictionGroupStandings(group, cur.id))}`;
+    html+=`<div class="group-title">${groupOrderName(group)}</div><div id="${predictionGroupDomId(group)}">${renderGroupStandings(group, getLivePredictionGroupStandings(group, cur.id))}</div>`;
     matches.filter(m=>m.group===group).forEach(m=>{
       const p=pred[String(m.id)]||{};
       const isJoker=participantJokers(cur.id).includes(String(m.id));
-      html+=`<div class="match"><div class="small">${m.date} • ${m.time}</div><div class="teams">${teamHTML(m.home)}<span>vs</span>${teamHTML(m.away)}</div><div class="score"><input id="pred-h-${m.id}" type="number" min="0" value="${p.home_goals??''}"><span>-</span><input id="pred-a-${m.id}" type="number" min="0" value="${p.away_goals??''}"></div>${participantMatchPointsHTML(cur.id, m.id, false)}${otherPredictionsHTML(m.id, false)}<div class="joker-row"><input class="joker-hidden" id="joker-${m.id}" type="checkbox" ${isJoker?'checked':''}><button type="button" id="joker-btn-${m.id}" class="joker-btn ${isJoker?'active':''}" onclick="toggleJoker('${m.id}')">⚡ ${isJoker?'Joker actief':'Joker'}</button><span class="joker-help">Maximaal 3 jokers, dubbele punten op deze poulewedstrijd.</span></div></div>`;
+      html+=`<div class="match"><div class="small">${m.date} • ${m.time}</div><div class="teams">${teamHTML(m.home)}<span>vs</span>${teamHTML(m.away)}</div><div class="score"><input id="pred-h-${m.id}" type="number" min="0" value="${p.home_goals??''}" oninput="livePredictionChanged()"><span>-</span><input id="pred-a-${m.id}" type="number" min="0" value="${p.away_goals??''}" oninput="livePredictionChanged()"></div>${participantMatchPointsHTML(cur.id, m.id, false)}${otherPredictionsHTML(m.id, false)}<div class="joker-row"><input class="joker-hidden" id="joker-${m.id}" type="checkbox" ${isJoker?'checked':''}><button type="button" id="joker-btn-${m.id}" class="joker-btn ${isJoker?'active':''}" onclick="toggleJoker('${m.id}')">⚡ ${isJoker?'Joker actief':'Joker'}</button><span class="joker-help">Maximaal 3 jokers, dubbele punten op deze poulewedstrijd.</span></div></div>`;
     });
     html += groupButton(group);
   });
