@@ -1,0 +1,2111 @@
+<!-- v59 update:
+- Algemene opslagfix voor oude accounts: poule, finales, jokers en bonus gebruiken nu upsert in plaats van delete + insert.
+- Bestaande lege records worden bijgewerkt in plaats van dat opslaan faalt of leeg terugkomt.
+- Na opslaan wordt direct gecontroleerd of de regels echt in Supabase staan.
+-->
+
+<!-- v53 update:
+- Oude lege/dubbele records in Supabase overschrijven nieuwe ingevulde voorspellingen niet meer bij uitlezen.
+- Poulewedstrijden slaan alleen compleet ingevulde uitslagen op; lege rijen worden niet opnieuw als voorspelling opgeslagen.
+- Bonus en finalelanden kiezen bij dubbele records altijd het ingevulde antwoord boven een oude lege waarde.
+-->
+
+<!-- v54 update:
+- Oude account-data wordt nu hard vervangen per sleutel: eerst oude regel(s) verwijderen, daarna nieuwe invoer opslaan.
+- Poulevelden zonder voorspelling starten weer leeg in plaats van 0-0.
+- Dit voorkomt dat oude/lege records na uitloggen of verversen de nieuwe invoer lijken te wissen.
+-->
+
+<!-- v51 update:
+- Beheer officiële poule-uitslagen werkt nu direct ook het tabblad Alle voorspellingen/totaaloverzicht bij.
+- Na opslaan blijft de korte melding ✅ Opgeslagen staan en worden Stand, Invullen, Overzicht en Finales opnieuw berekend vanuit de bijgewerkte state.
+-->
+
+<!-- v48 update:
+- Supabase is nu de enige bron voor voorspellingen en bonusantwoorden.
+- Lokale backup/localStorage wordt niet meer samengevoegd in schermen of voortgang.
+- Na opslaan wordt alleen data gebruikt die Supabase teruggeeft, zodat iedereen hetzelfde ziet op elk apparaat.
+-->
+
+<!-- v47 update:
+- Poulevoorspellingen geven pas Opgeslagen als Supabase de opgeslagen regels ook teruggeeft.
+- Voorkomt dat deelnemers 72/72 zien door lokale telefoonopslag terwijl beheer/totaaloverzicht niets uit de database kan lezen.
+- Na opslaan wordt het totaaloverzicht direct opnieuw gerenderd.
+-->
+
+<!-- v50 update:
+- Supabase blijft de enige bron voor voorspellingen en bonusantwoorden.
+- Na opslaan blijven de ingevulde velden zichtbaar; alleen state/stand/overzicht worden bijgewerkt.
+- De melding bovenin is weer kort: ✅ Opgeslagen.
+-->
+
+<!-- v46 update:
+- Opslaan van bonusvragen geeft pas Opgeslagen als Supabase de opgeslagen regels ook teruggeeft.
+- loadAll controleert nu fouten op alle Supabase-tabellen, niet alleen deelnemers.
+- Overzicht gebruikt dezelfde samengevoegde opslagdata als de schermen zelf.
+-->
+
+<!-- v45 update:
+- Bonusvragen hebben nu een knop Alle bonusvragen opslaan.
+- Bonusvragen, jokers, poulevoorspellingen en finaleschema krijgen een lokale back-up per deelnemer zodat ingevulde velden niet wegvallen als Supabase na opslaan tijdelijk niets terugleest.
+- Opslag werkt nu direct de lokale state bij en gebruikt Supabase-data plus lokale back-up bij opnieuw renderen.
+-->
+
+<!-- v44 update:
+- In het overzicht tonen finalevoorspellingen nu ook de gekozen landen in kleine tekst.
+- Bonusvragen en antwoorden van alle deelnemers staan onderaan het overzicht.
+-->
+
+<!-- v43 update:
+- Scrollbalken in tabblad 'Alle voorspellingen' zijn verborgen.
+- Finaleschema staat nu ook onderaan in het overzicht.
+-->
+
+<!-- v42 update:
+- In tabblad 'Alle voorspellingen' kleuren poulevoorspellingen automatisch na officiële uitslag.
+- Groen = exact goed, oranje = winnaar/gelijkspel goed, rood = fout, met punten klein eronder.
+-->
+
+<!-- v41 update:
+- Extra tabblad 'Alle voorspellingen' toegevoegd.
+- Goedgekeurde deelnemers kunnen daar per wedstrijd alle ingevulde uitslagen naast elkaar bekijken.
+-->
+
+<!-- v40 update:
+- Namen verschijnen nu al bij inloggen zodra een deelnemer is goedgekeurd.
+- Betaald staat volledig los van toegang en blijft alleen administratie.
+-->
+
+
+<!-- v38 update:
+- Finaleschema Laatste 32 gebruikt nu per deelnemer exact de eigen voorspelde poulestand per pouleplek.
+- Voorbeeld: als een deelnemer Tsjechië als 1e in Poule A heeft voorspeld, verschijnt Tsjechië bij 1e Poule A.
+- Beste nummers 3 worden ook per deelnemer uit de eigen voorspelde poulestanden bepaald.
+- Na opslaan van een poule wordt het finaleschema meteen opnieuw opgebouwd met die eigen poulestand.
+-->
+
+<!-- v31 update:
+- Deelnemer verwijderen doet nu een harde verwijdering: eerst voorspellingen/bonus/berichten weg, daarna het account zelf.
+- De verwijderde deelnemer verdwijnt direct uit beheer en uit alles wat andere deelnemers zien.
+-->
+
+<!-- v34 update:
+- Vaste voortgangsbalk onderin toegevoegd voor Invullen, Finaleschema en Bonus.
+- Landenkeuze in Laatste 32 toont nu de plek van dat land in de eigen voorspelde poulestand.
+-->
+
+<!-- v36 update:
+- Bij achtste finales, kwartfinales, halve finales en finale staat in de landenkeuze nu per vorig duel wie daar wint of verliest.
+- In beheer kunnen deelnemersnamen nu aangepast en opgeslagen worden.
+-->
+
+<!-- v35 update:
+- Beheer knock-out landen worden nu direct opgeslagen zodra je een land kiest.
+- De stand en punten worden meteen opnieuw berekend na beheer-invoer.
+- Bij knock-out opslaan wordt de database opnieuw geladen zodat landpunten direct zichtbaar zijn.
+-->
+
+<!-- v29 update:
+- loadAll leest nu eerst de globale verwijderlijst en filtert daarna pas deelnemers. Daardoor blijven verwijderde deelnemers niet terugkomen in beheer of bij nieuwe gebruikers.
+- Verwijderen haalt deelnemer direct uit beheer, verwijdert voorspellingen/bonus/berichten en toont een bevestigingspop-up.
+-->
+
+<!-- v27 update:
+- Verwijderen blokkeert niet meer op de globale verwijderlijst.
+- Deelnemers worden eerst direct lokaal verwijderd en daarna wereldwijd op status deleted gezet.
+-->
+
+<!-- v26 update:
+- Verwijderde deelnemers worden nu opgeslagen in een globale verwijderlijst in Supabase app_settings. Daardoor verdwijnen oude accounts ook voor nieuwe gebruikers.
+- Oude lokaal verwijderde accounts worden automatisch gesynchroniseerd naar die globale verwijderlijst zodra beheer de nieuwe versie opent.
+- Voorspellingen, bonus en berichten van verwijderde deelnemers worden overal weggefilterd.
+-->
+
+<!-- v25 update:
+- Deelnemers verwijderen zet ze nu eerst wereldwijd op status deleted in Supabase. Daardoor verdwijnen ze ook voor nieuwe gebruikers overal uit de app.
+- Voorspellingen, bonusantwoorden en berichten van verwijderde deelnemers worden direct weggehaald.
+-->
+
+<!-- v24 update:
+- Verwijderde deelnemers verdwijnen direct uit de lijst 'Kies je naam' op het inlogscherm.
+-->
+
+<!-- v23 update:
+- Beheer blijft beveiligd met beheercode 2026.
+- Bij alle wedstrijden worden de voorspellingen van andere deelnemers klein erbij getoond.
+-->
+
+<!-- v22 update:
+- Bij het finaleschema staan nu vlaggen naast de landenkeuzes, zowel voor deelnemers als beheer.
+-->
+
+<!-- v21 update:
+- Bij aanmelden/inloggen worden in de deelnemerslijst alleen namen getoond, geen e-mailadressen.
+-->
+
+<!-- v20 update:
+- Puntenuitleg wordt direct bijgewerkt zodra beheer iets invult.
+- Poulepunten tonen joker-uitleg, ook als de uitslag nog niet bekend is.
+- Knock-out verkeerde plek telt nu rondebreed: land door in dezelfde ronde maar op andere plek geeft verkeerde-plekpunten.
+-->
+
+<!-- v19 update:
+- Alle punten tellen direct mee in de scorelijst zodra beheer iets officieel invult.
+- Poulepunten tellen per wedstrijd; niet meer pas na complete poule.
+- Knock-out landpunten tellen zodra beheer officiële landen invult, ook als de uitslag nog leeg is.
+- Knock-out uitslagpunten komen later erbij zodra beheer de uitslag invult.
+-->
+
+<!-- v18 update:
+- Finaleschema is nu altijd deelnemer-voorspelling; officiële finale-invoer staat alleen in Beheer.
+- Knock-out puntentelling aangepast: uitslag exact 9, winnaar/gelijkspel 3, land verkeerde plek/juiste plek volgens ronde, alles exact extra.
+- Deelnemers zien per poulewedstrijd en finalewedstrijd hoeveel punten ze hebben verdiend.
+- Lege officiële uitslagen worden als leeg opgeslagen, waardoor punten verdwijnen als beheerder de uitslag weghaalt.
+-->
+
+<!-- v17 update:
+Fix: finale-uitslagen in beheer blijven nu staan bij opslaan; dubbele verborgen finalevelden worden niet meer per ongeluk gelezen.
+Controle: knock-out puntenregeling staat in beheer en puntenpagina.
+-->
+
+<!-- v14 update:
+Als in een knock-outwedstrijd een gelijke stand wordt ingevuld (bijv. 1-1),
+wordt na opslaan verplicht gevraagd welk land doorgaat.
+De keuze licht op totdat een winnaar is geselecteerd.
+Deze winnaar wordt gebruikt voor de volgende ronde.
+-->
+
+<!-- v13 update:
+Toegevoegd:
+- Bij knock-outwedstrijden kunnen bij gelijkspel de winnaar via verlenging/strafschoppen worden aangevinkt.
+- Deze keuze bepaalt alleen welke ploeg doorgaat naar de volgende ronde.
+-->
+
+<!-- v37 update:
+- Knock-outkeuzes tonen nu de winnaar/verliezer-informatie ook zichtbaar onder de keuzelijst, niet alleen in de dropdown.
+- Beheer deelnemersnamen heeft nu een duidelijk naamveld met knop Naam opslaan.
+-->
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WK Poule 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0b1220;--card:#162033;--card2:#1e293b;--line:#334155;--text:#e2e8f0;--muted:#94a3b8;--orange:#f97316;--green:#16a34a;--blue:#2563eb;--red:#dc2626;--purple:#a855f7;}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text);padding-bottom:64px}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:20px 12px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+header h1{margin:0;font-size:28px}
+.container{max-width:1150px;margin:0 auto;padding:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+.nav{display:grid;grid-template-columns:repeat(9,1fr);gap:8px;margin-bottom:16px}
+.nav button{background:#24324a;color:white;border:none;border-radius:12px;padding:11px;font-weight:800;cursor:pointer}
+.nav button.active{background:var(--blue)}
+.nav-public{grid-template-columns:repeat(2,1fr)}
+h2,h3{margin-top:0} .hidden{display:none} .small{font-size:12px;color:var(--muted)}
+input,select,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#0f172a;color:white;font-size:15px;margin:5px 0 10px}
+textarea{min-height:85px;resize:vertical}
+button.save{background:var(--orange);color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;margin:3px}
+button.save.saved{background:var(--green)} button.danger{background:var(--red)} button.secondary{background:#334155}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+.table{width:100%;border-collapse:collapse;font-size:13px} .table th,.table td{padding:7px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle} .table th:nth-child(2),.table td:nth-child(2){text-align:left}
+.match{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+.group-title{background:#0f172a;border:1px solid var(--line);padding:12px 14px;border-radius:14px;margin:22px 0 12px;font-weight:800}
+.teams{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800;margin-bottom:8px}
+.team{display:flex;align-items:center;gap:8px;min-width:0} .team span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.flag{width:30px;height:21px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.25);background:#fff}
+.score{display:flex;gap:8px;align-items:center} .score input{width:60px;text-align:center;margin:0}
+.status-pill{display:inline-block;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:800}
+.pending{background:#78350f;color:#fed7aa} .approved{background:#14532d;color:#bbf7d0} .rejected{background:#7f1d1d;color:#fecaca} .paid{background:#14532d;color:#bbf7d0} .unpaid{background:#7f1d1d;color:#fecaca}
+.podium{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px} .podium-card{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:14px;text-align:center} .gold{border-color:#facc15} .silver{border-color:#cbd5e1} .bronze{border-color:#fb923c} .score-number{font-size:24px;font-weight:900;color:#86efac}
+.notice{background:#0f172a;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;color:#cbd5e1}.progress-box{background:linear-gradient(135deg,rgba(37,99,235,.22),rgba(168,85,247,.16));border:1px solid rgba(147,197,253,.35);border-radius:16px;padding:14px;margin-bottom:16px}.progress-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-weight:900}.progress-count{font-size:22px;color:#86efac}.progress-bar{height:10px;background:#0f172a;border:1px solid #334155;border-radius:999px;overflow:hidden;margin-top:10px}.progress-fill{height:100%;background:linear-gradient(90deg,#2563eb,#16a34a);border-radius:999px}.sticky-progress{position:fixed;left:12px;right:12px;bottom:10px;z-index:9998;background:rgba(15,23,42,.96);border:1px solid rgba(147,197,253,.42);border-radius:999px;padding:8px 12px;box-shadow:0 10px 26px rgba(0,0,0,.45);backdrop-filter:blur(8px)}.sticky-progress.hidden{display:none}.sticky-progress-inner{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:12px;font-weight:900}.sticky-progress .progress-bar{height:7px;margin:0}.sticky-progress-count{color:#86efac;font-size:13px;white-space:nowrap}.locked{opacity:.45;pointer-events:none}.access-box{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+.msg{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px} .msg strong{color:#fff} .msg time{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+#toast{position:fixed;top:18px;right:18px;z-index:9999;background:#111827;border:1px solid rgba(168,85,247,.55);color:white;padding:12px 16px;border-radius:14px;font-weight:900;box-shadow:0 10px 28px rgba(0,0,0,.45),0 0 18px rgba(168,85,247,.22);opacity:0;transform:translateY(-10px);pointer-events:none;transition:opacity .25s ease,transform .25s ease}
+#toast.show{opacity:1;transform:translateY(0)}
+
+.group-standings{margin:10px 0 14px;background:#0f172a;border:1px solid var(--line);border-radius:14px;padding:10px;overflow-x:auto}
+.group-actions{display:flex;justify-content:flex-end;margin:12px 0 24px}
+.bracket-grid{display:block}.bracket-round{margin-bottom:18px}.bracket-match{margin-bottom:10px}
+.bracket-round{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:12px}
+.bracket-match{background:#0f172a;border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.bracket-team{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.bracket-team:last-child{border-bottom:none}
+.seed{color:var(--muted);font-size:12px}
+.joker-hidden{display:none}.joker-row{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.joker-btn{border:1px solid #334155;background:#0f172a;color:#94a3b8;border-radius:10px;padding:9px 14px;font-weight:900;cursor:pointer;box-shadow:0 0 0 rgba(0,0,0,0);transition:.18s ease}.joker-btn.active{border-color:#a855f7;background:rgba(168,85,247,.28);color:#f3e8ff;box-shadow:0 0 18px rgba(168,85,247,.38)}.joker-btn:disabled{opacity:.42;cursor:not-allowed}.joker-count{color:#c084fc;font-weight:900}.joker-help{font-size:12px;color:#94a3b8}
+.rank-move{display:inline-flex;align-items:center;justify-content:center;gap:2px;white-space:nowrap}
+.rank-chevron{width:22px;height:14px;display:block}
+.rank-chevron svg{width:100%;height:100%;display:block}
+.rank-chevron.up{color:#39ff14;filter:drop-shadow(0 0 4px rgba(57,255,20,.45))}
+.rank-chevron.down{color:#ff003c;filter:drop-shadow(0 0 4px rgba(255,0,60,.35))}
+.rank-same{display:inline-block;width:26px;height:6px;background:#f97316;border-radius:999px;box-shadow:0 0 6px rgba(249,115,22,.35)}
+.rank-new{color:#94a3b8;font-size:12px}
+
+.ko-country-row{display:flex;align-items:center;gap:8px;margin:5px 0 10px}
+.ko-country-row select{margin:0;flex:1}
+.ko-country-flag{width:30px;height:21px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.25);background:#fff;flex:0 0 auto}
+.ko-country-flag.placeholder{background:#334155;box-shadow:none}
+
+
+.other-preds{font-size:10px;color:#cbd5e1;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:6px 8px;margin:7px 0;line-height:1.45}
+.other-preds strong{font-size:10px;color:#94a3b8;margin-right:4px}
+.other-pred-chip{display:inline-block;margin:2px 5px 2px 0;padding:2px 6px;border-radius:999px;background:#1e293b;border:1px solid rgba(148,163,184,.16);white-space:nowrap}
+
+select option:disabled{color:#64748b;background:#111827}
+.ko-choice-label{font-size:12px;color:#86efac;margin:-5px 0 8px 38px;font-weight:800}
+
+.pred-cell{border-radius:10px;padding:7px 8px;font-weight:900;display:inline-block;min-width:58px}
+.pred-cell.pending-cell{background:#334155;color:#e2e8f0}
+.pred-cell.exact-cell{background:#14532d;color:#bbf7d0}
+.pred-cell.outcome-cell{background:#78350f;color:#fed7aa}
+.pred-cell.wrong-cell{background:#7f1d1d;color:#fecaca}
+.pred-points{display:block;font-size:10px;font-weight:800;opacity:.9;margin-top:2px}
+
+/* Verberg scrollbalken maar laat horizontaal scrollen wel werken */
+div[style*="overflow-x:auto"]{
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+div[style*="overflow-x:auto"]::-webkit-scrollbar{
+  display:none;
+}
+@media(max-width:800px){.nav{grid-template-columns:1fr 1fr}.podium{grid-template-columns:1fr}header h1{font-size:23px}.container{padding:10px}.card{padding:12px}.table{font-size:12px}}
+
+.knockout-winner-toggle{
+  display:flex;
+  gap:12px;
+  margin:8px 0 10px;
+  flex-wrap:wrap;
+}
+.knockout-winner-toggle label{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 12px;
+  border:1px solid #334155;
+  border-radius:10px;
+  background:#0f172a;
+  cursor:pointer;
+}
+
+</style>
+</head>
+<body>
+<header><h1>🏆 WK Poule 2026</h1></header>
+<div id="toast">✅ Opgeslagen</div>
+<div id="stickyProgress" class="sticky-progress hidden"></div>
+<div class="container">
+  <div class="nav nav-public" id="publicNav">
+    <button id="btn-signup" onclick="showTab('signup')" class="active">📝 Aanmelden</button>
+    <button id="btn-admin" onclick="showTab('admin')">🔐 Beheer</button>
+  </div>
+
+  <div class="nav hidden" id="mainNav">
+    <button id="btn-standings" onclick="showTab('standings')">📊 Stand</button>
+    <button id="btn-predictions" onclick="showTab('predictions')">✍️ Invullen</button>
+    <button id="btn-overview" onclick="showTab('overview')">👥 Overzicht</button>
+    <button id="btn-finals" onclick="showTab('finals')">🏆 Finaleschema</button>
+    <button id="btn-bonus" onclick="showTab('bonus')">⭐ Bonus</button>
+    <button id="btn-chat" onclick="showTab('chat')">💬 Berichten</button>
+    <button id="btn-admin2" onclick="showTab('admin')">🔐 Beheer</button>
+    <button id="btn-rules" onclick="showTab('rules')">📋 Punten</button>
+    <button onclick="logout()">🚪 Uitloggen</button>
+  </div>
+
+  <div id="accessBox" class="card"></div>
+
+  <section id="tab-signup" class="card"><h2>📝 Aanmelden</h2><div id="signupBox"></div></section>
+  <section id="tab-standings" class="card hidden"><h2>📊 Deelnemersstand</h2><div id="standings"></div></section>
+  <section id="tab-predictions" class="card hidden"><h2>✍️ Voorspellingen invullen</h2><div id="predictionBox"></div></section>
+  <section id="tab-overview" class="card hidden"><h2>👥 Alle voorspellingen</h2><div id="overviewBox"></div></section>
+  <section id="tab-finals" class="card hidden"><h2>🏆 Finaleschema</h2><div id="finalsBox"></div></section>
+  <section id="tab-bonus" class="card hidden"><h2>⭐ Bonusvragen</h2><div id="bonusBox"></div></section>
+  <section id="tab-chat" class="card hidden"><h2>💬 Berichten</h2><div id="chatBox"></div></section>
+  <section id="tab-admin" class="card hidden"><h2>🔐 Beheer</h2><div id="adminLogin"></div><div id="adminPanel" class="hidden"></div></section>
+  <section id="tab-rules" class="card hidden"><h2>📋 Puntenregeling</h2><div id="rulesBox"></div></section>
+</div>
+
+<script>
+const SUPABASE_URL = "https://mvzffolqmewnuoudmdak.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_cCpF1dUP7YWZ2KJnfxj7LA_S0fDRb8j";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const ADMIN_CODE = "2026";
+
+const matches = [
+  {id:1,group:"Groep A",date:"11 juni 2026",time:"21:00",home:{name:"Mexico",flag:"mx"},away:{name:"Zuid-Afrika",flag:"za"}},
+  {id:2,group:"Groep A",date:"12 juni 2026",time:"04:00",home:{name:"Zuid-Korea",flag:"kr"},away:{name:"Tsjechië",flag:"cz"}},
+  {id:3,group:"Groep B",date:"12 juni 2026",time:"21:00",home:{name:"Canada",flag:"ca"},away:{name:"Bosnië",flag:"ba"}},
+  {id:4,group:"Groep D",date:"13 juni 2026",time:"03:00",home:{name:"Verenigde Staten",flag:"us"},away:{name:"Paraguay",flag:"py"}},
+  {id:5,group:"Groep B",date:"13 juni 2026",time:"21:00",home:{name:"Qatar",flag:"qa"},away:{name:"Zwitserland",flag:"ch"}},
+  {id:6,group:"Groep C",date:"14 juni 2026",time:"01:00",home:{name:"Brazilië",flag:"br"},away:{name:"Marokko",flag:"ma"}},
+  {id:7,group:"Groep C",date:"14 juni 2026",time:"03:00",home:{name:"Haïti",flag:"ht"},away:{name:"Schotland",flag:"gb-sct"}},
+  {id:8,group:"Groep D",date:"14 juni 2026",time:"06:00",home:{name:"Australië",flag:"au"},away:{name:"Turkije",flag:"tr"}},
+  {id:9,group:"Groep E",date:"14 juni 2026",time:"20:00",home:{name:"Duitsland",flag:"de"},away:{name:"Curaçao",flag:"cw"}},
+  {id:10,group:"Groep F",date:"14 juni 2026",time:"23:00",home:{name:"Nederland",flag:"nl"},away:{name:"Japan",flag:"jp"}},
+  {id:11,group:"Groep E",date:"15 juni 2026",time:"02:00",home:{name:"Ivoorkust",flag:"ci"},away:{name:"Ecuador",flag:"ec"}},
+  {id:12,group:"Groep F",date:"15 juni 2026",time:"06:00",home:{name:"Zweden",flag:"se"},away:{name:"Tunesië",flag:"tn"}},
+  {id:13,group:"Groep H",date:"15 juni 2026",time:"19:00",home:{name:"Spanje",flag:"es"},away:{name:"Kaapverdië",flag:"cv"}},
+  {id:14,group:"Groep G",date:"16 juni 2026",time:"01:00",home:{name:"België",flag:"be"},away:{name:"Egypte",flag:"eg"}},
+  {id:15,group:"Groep H",date:"16 juni 2026",time:"01:00",home:{name:"Saoedi-Arabië",flag:"sa"},away:{name:"Uruguay",flag:"uy"}},
+  {id:16,group:"Groep G",date:"16 juni 2026",time:"07:00",home:{name:"Iran",flag:"ir"},away:{name:"Nieuw-Zeeland",flag:"nz"}},
+  {id:17,group:"Groep I",date:"16 juni 2026",time:"22:00",home:{name:"Frankrijk",flag:"fr"},away:{name:"Senegal",flag:"sn"}},
+  {id:18,group:"Groep I",date:"17 juni 2026",time:"01:00",home:{name:"Irak",flag:"iq"},away:{name:"Noorwegen",flag:"no"}},
+  {id:19,group:"Groep J",date:"17 juni 2026",time:"05:00",home:{name:"Argentinië",flag:"ar"},away:{name:"Algerije",flag:"dz"}},
+  {id:20,group:"Groep J",date:"17 juni 2026",time:"10:00",home:{name:"Oostenrijk",flag:"at"},away:{name:"Jordanië",flag:"jo"}},
+  {id:21,group:"Groep K",date:"17 juni 2026",time:"21:00",home:{name:"Portugal",flag:"pt"},away:{name:"DR Congo",flag:"cd"}},
+  {id:22,group:"Groep L",date:"18 juni 2026",time:"00:00",home:{name:"Engeland",flag:"gb-eng"},away:{name:"Kroatië",flag:"hr"}},
+  {id:23,group:"Groep L",date:"18 juni 2026",time:"02:00",home:{name:"Ghana",flag:"gh"},away:{name:"Panama",flag:"pa"}},
+  {id:24,group:"Groep K",date:"18 juni 2026",time:"06:00",home:{name:"Oezbekistan",flag:"uz"},away:{name:"Colombia",flag:"co"}},
+  {id:25,group:"Groep A",date:"18 juni 2026",time:"19:00",home:{name:"Tsjechië",flag:"cz"},away:{name:"Zuid-Afrika",flag:"za"}},
+  {id:26,group:"Groep B",date:"19 juni 2026",time:"01:00",home:{name:"Zwitserland",flag:"ch"},away:{name:"Bosnië",flag:"ba"}},
+  {id:27,group:"Groep B",date:"19 juni 2026",time:"04:00",home:{name:"Canada",flag:"ca"},away:{name:"Qatar",flag:"qa"}},
+  {id:28,group:"Groep A",date:"19 juni 2026",time:"05:00",home:{name:"Mexico",flag:"mx"},away:{name:"Zuid-Korea",flag:"kr"}},
+  {id:29,group:"Groep C",date:"20 juni 2026",time:"01:00",home:{name:"Schotland",flag:"gb-sct"},away:{name:"Marokko",flag:"ma"}},
+  {id:30,group:"Groep D",date:"20 juni 2026",time:"01:00",home:{name:"Verenigde Staten",flag:"us"},away:{name:"Australië",flag:"au"}},
+  {id:31,group:"Groep C",date:"20 juni 2026",time:"04:00",home:{name:"Brazilië",flag:"br"},away:{name:"Haïti",flag:"ht"}},
+  {id:32,group:"Groep D",date:"20 juni 2026",time:"10:00",home:{name:"Turkije",flag:"tr"},away:{name:"Paraguay",flag:"py"}},
+  {id:33,group:"Groep F",date:"20 juni 2026",time:"21:00",home:{name:"Nederland",flag:"nl"},away:{name:"Zweden",flag:"se"}},
+  {id:34,group:"Groep E",date:"20 juni 2026",time:"23:00",home:{name:"Duitsland",flag:"de"},away:{name:"Ivoorkust",flag:"ci"}},
+  {id:35,group:"Groep E",date:"21 juni 2026",time:"06:00",home:{name:"Ecuador",flag:"ec"},away:{name:"Curaçao",flag:"cw"}},
+  {id:36,group:"Groep F",date:"21 juni 2026",time:"08:00",home:{name:"Tunesië",flag:"tn"},away:{name:"Japan",flag:"jp"}},
+  {id:37,group:"Groep H",date:"21 juni 2026",time:"19:00",home:{name:"Spanje",flag:"es"},away:{name:"Saoedi-Arabië",flag:"sa"}},
+  {id:38,group:"Groep G",date:"22 juni 2026",time:"01:00",home:{name:"België",flag:"be"},away:{name:"Iran",flag:"ir"}},
+  {id:39,group:"Groep H",date:"22 juni 2026",time:"01:00",home:{name:"Uruguay",flag:"uy"},away:{name:"Kaapverdië",flag:"cv"}},
+  {id:40,group:"Groep G",date:"22 juni 2026",time:"07:00",home:{name:"Nieuw-Zeeland",flag:"nz"},away:{name:"Egypte",flag:"eg"}},
+  {id:41,group:"Groep J",date:"22 juni 2026",time:"21:00",home:{name:"Argentinië",flag:"ar"},away:{name:"Oostenrijk",flag:"at"}},
+  {id:42,group:"Groep I",date:"23 juni 2026",time:"00:00",home:{name:"Frankrijk",flag:"fr"},away:{name:"Irak",flag:"iq"}},
+  {id:43,group:"Groep I",date:"23 juni 2026",time:"03:00",home:{name:"Noorwegen",flag:"no"},away:{name:"Senegal",flag:"sn"}},
+  {id:44,group:"Groep J",date:"23 juni 2026",time:"09:00",home:{name:"Jordanië",flag:"jo"},away:{name:"Algerije",flag:"dz"}},
+  {id:45,group:"Groep K",date:"23 juni 2026",time:"21:00",home:{name:"Portugal",flag:"pt"},away:{name:"Oezbekistan",flag:"uz"}},
+  {id:46,group:"Groep L",date:"23 juni 2026",time:"23:00",home:{name:"Engeland",flag:"gb-eng"},away:{name:"Ghana",flag:"gh"}},
+  {id:47,group:"Groep L",date:"24 juni 2026",time:"02:00",home:{name:"Panama",flag:"pa"},away:{name:"Kroatië",flag:"hr"}},
+  {id:48,group:"Groep K",date:"24 juni 2026",time:"06:00",home:{name:"Colombia",flag:"co"},away:{name:"DR Congo",flag:"cd"}},
+  {id:49,group:"Groep B",date:"25 juni 2026",time:"01:00",home:{name:"Zwitserland",flag:"ch"},away:{name:"Canada",flag:"ca"}},
+  {id:50,group:"Groep B",date:"25 juni 2026",time:"01:00",home:{name:"Bosnië",flag:"ba"},away:{name:"Qatar",flag:"qa"}},
+  {id:51,group:"Groep C",date:"25 juni 2026",time:"01:00",home:{name:"Schotland",flag:"gb-sct"},away:{name:"Brazilië",flag:"br"}},
+  {id:52,group:"Groep C",date:"25 juni 2026",time:"01:00",home:{name:"Marokko",flag:"ma"},away:{name:"Haïti",flag:"ht"}},
+  {id:53,group:"Groep A",date:"25 juni 2026",time:"05:00",home:{name:"Tsjechië",flag:"cz"},away:{name:"Mexico",flag:"mx"}},
+  {id:54,group:"Groep A",date:"25 juni 2026",time:"05:00",home:{name:"Zuid-Afrika",flag:"za"},away:{name:"Zuid-Korea",flag:"kr"}},
+  {id:55,group:"Groep E",date:"25 juni 2026",time:"23:00",home:{name:"Ecuador",flag:"ec"},away:{name:"Duitsland",flag:"de"}},
+  {id:56,group:"Groep E",date:"25 juni 2026",time:"23:00",home:{name:"Curaçao",flag:"cw"},away:{name:"Ivoorkust",flag:"ci"}},
+  {id:57,group:"Groep F",date:"26 juni 2026",time:"03:00",home:{name:"Japan",flag:"jp"},away:{name:"Zweden",flag:"se"}},
+  {id:58,group:"Groep F",date:"26 juni 2026",time:"03:00",home:{name:"Tunesië",flag:"tn"},away:{name:"Nederland",flag:"nl"}},
+  {id:59,group:"Groep D",date:"26 juni 2026",time:"08:00",home:{name:"Turkije",flag:"tr"},away:{name:"Verenigde Staten",flag:"us"}},
+  {id:60,group:"Groep D",date:"26 juni 2026",time:"08:00",home:{name:"Paraguay",flag:"py"},away:{name:"Australië",flag:"au"}},
+  {id:61,group:"Groep I",date:"26 juni 2026",time:"22:00",home:{name:"Noorwegen",flag:"no"},away:{name:"Frankrijk",flag:"fr"}},
+  {id:62,group:"Groep I",date:"26 juni 2026",time:"22:00",home:{name:"Senegal",flag:"sn"},away:{name:"Irak",flag:"iq"}},
+  {id:63,group:"Groep H",date:"27 juni 2026",time:"04:00",home:{name:"Kaapverdië",flag:"cv"},away:{name:"Saoedi-Arabië",flag:"sa"}},
+  {id:64,group:"Groep H",date:"27 juni 2026",time:"04:00",home:{name:"Uruguay",flag:"uy"},away:{name:"Spanje",flag:"es"}},
+  {id:65,group:"Groep G",date:"27 juni 2026",time:"09:00",home:{name:"Egypte",flag:"eg"},away:{name:"Iran",flag:"ir"}},
+  {id:66,group:"Groep G",date:"27 juni 2026",time:"09:00",home:{name:"Nieuw-Zeeland",flag:"nz"},away:{name:"België",flag:"be"}},
+  {id:67,group:"Groep L",date:"28 juni 2026",time:"00:00",home:{name:"Panama",flag:"pa"},away:{name:"Engeland",flag:"gb-eng"}},
+  {id:68,group:"Groep L",date:"28 juni 2026",time:"00:00",home:{name:"Kroatië",flag:"hr"},away:{name:"Ghana",flag:"gh"}},
+  {id:69,group:"Groep K",date:"28 juni 2026",time:"04:30",home:{name:"Colombia",flag:"co"},away:{name:"Portugal",flag:"pt"}},
+  {id:70,group:"Groep K",date:"28 juni 2026",time:"04:30",home:{name:"DR Congo",flag:"cd"},away:{name:"Oezbekistan",flag:"uz"}},
+  {id:71,group:"Groep J",date:"28 juni 2026",time:"06:00",home:{name:"Algerije",flag:"dz"},away:{name:"Oostenrijk",flag:"at"}},
+  {id:72,group:"Groep J",date:"28 juni 2026",time:"06:00",home:{name:"Jordanië",flag:"jo"},away:{name:"Argentinië",flag:"ar"}}
+];
+
+const bonusQuestions = [
+  {id:"kampioen", question:"Wie wordt wereldkampioen?", points:10, type:"select"},
+  {id:"finalist1", question:"Finalist 1", points:10, type:"select"},
+  {id:"finalist2", question:"Finalist 2", points:10, type:"select"},
+  {id:"topscorer", question:"Wie wordt topscorer van het WK?", points:10, type:"text"},
+  {id:"nederland", question:"Hoe ver komt Nederland?", points:10, type:"select", options:["","Groepsfase","Laatste 32","Achtste finale","Kwartfinale","Halve finale","Finale","Wereldkampioen"]},
+  {id:"meesteGoals", question:"Welk land maakt de meeste doelpunten?", points:10, type:"select"},
+  {id:"eersteNaarHuis", question:"Wie gaat er als eerste naar huis?", points:10, type:"select"},
+  {id:"eersteGeel", question:"Welk land krijgt de eerste gele kaart?", points:10, type:"select"},
+  {id:"eersteRood", question:"Welk land krijgt de eerste rode kaart?", points:10, type:"select"},
+  {id:"goalsNederland", question:"Hoeveel goals scoort Nederland in totaal?", points:10, type:"select", options:["","0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15+"]}
+];
+
+let state = {
+  participants: [], predictions: [], results: [], bonus: [], officialBonus: [], messages: [],
+  settings: { registration_open: true, predictions_open: false },
+  currentParticipant: JSON.parse(localStorage.getItem("wk_current_participant") || "null"),
+  adminUnlocked: localStorage.getItem("wk_admin_unlocked") === "true"
+};
+
+function flag(code){return `https://flagcdn.com/w40/${code}.png`;}
+function teamHTML(t){return `<span class="team"><img class="flag" src="${flag(t.flag)}" alt="${esc(t.name)} vlag"><span>${esc(t.name)}</span></span>`;}
+
+function teamByName(name){
+  return matches.flatMap(m=>[m.home,m.away]).find(t=>t.name===name) || null;
+}
+function countryFlagImg(name, id=""){
+  const t=teamByName(name);
+  if(!t) return `<span id="${id}" class="ko-country-flag placeholder"></span>`;
+  return `<img id="${id}" class="ko-country-flag" src="${flag(t.flag)}" alt="${esc(name)} vlag">`;
+}
+function updateCountryFlag(select){
+  const img=document.getElementById(`flag-${select.id}`);
+  const t=teamByName(select.value);
+  if(img){
+    if(t){
+      img.outerHTML=`<img id="flag-${select.id}" class="ko-country-flag" src="${flag(t.flag)}" alt="${esc(select.value)} vlag">`;
+    }else{
+      img.outerHTML=`<span id="flag-${select.id}" class="ko-country-flag placeholder"></span>`;
+    }
+  }
+  const label=document.getElementById(`label-${select.id}`);
+  if(label){
+    const opt=select.selectedOptions && select.selectedOptions[0];
+    const extra=opt ? (opt.getAttribute('data-ko-label') || '') : '';
+    label.textContent = select.value && extra ? `${select.value} — ${extra}` : '';
+  }
+}
+
+function hasAccess(){
+  if(state.adminUnlocked) return true;
+  const cur = state.currentParticipant;
+  if(!cur) return false;
+  const fresh = state.participants.find(p=>p.id===cur.id);
+  return !!fresh && fresh.status==="approved";
+}
+function publicTab(tab){return tab==="signup" || tab==="admin";}
+function updateNavigation(){
+  const access = hasAccess();
+  document.getElementById("publicNav").classList.toggle("hidden", access);
+  document.getElementById("mainNav").classList.toggle("hidden", !access);
+}
+function showTab(tab){
+  if(!publicTab(tab) && !hasAccess()){
+    tab="signup";
+    setTimeout(()=>alert("Je hebt toegang zodra je bent goedgekeurd door de beheerder."),50);
+  }
+  window.currentTab=tab;
+  ["standings","signup","predictions","overview","finals","bonus","chat","admin","rules"].forEach(t=>{
+    document.getElementById("tab-"+t).classList.toggle("hidden",t!==tab);
+    const btn=document.getElementById("btn-"+t);
+    if(btn) btn.classList.toggle("active",t===tab);
+    const btn2=document.getElementById("btn-admin2");
+    if(btn2 && t==="admin") btn2.classList.toggle("active",tab==="admin");
+  });
+  renderStickyProgress(tab);
+}
+function esc(v){return String(v??"").replace(/[&<>"']/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[s]));}
+function countryOptions(value=""){const names=[...new Set(matches.flatMap(m=>[m.home.name,m.away.name]))].sort();return `<option value="">Maak een keuze</option>`+names.map(n=>`<option value="${esc(n)}" ${n===value?"selected":""}>${esc(n)}</option>`).join("");}
+function optionList(options,value=""){return options.map(o=>`<option value="${esc(o)}" ${o===value?"selected":""}>${o===""?"Maak een keuze":esc(o)}</option>`).join("");}
+function showToast(message="✅ Opgeslagen"){
+  const toast=document.getElementById("toast");
+  if(!toast) return;
+  toast.textContent=message;
+  toast.classList.add("show");
+  clearTimeout(window.toastTimer);
+  window.toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);
+}
+
+
+// v48: Supabase is de enige bron van waarheid voor voorspellingen en bonusantwoorden.
+// localStorage bewaren we alleen nog voor login/admin-status en de verwijderlijst; niet voor ingevulde uitslagen.
+function getMergedBonusRows(pid){
+  return state.bonus.filter(b=>b.participant_id===pid);
+}
+function getMergedPredictionRows(pid){
+  return state.predictions.filter(p=>p.participant_id===pid);
+}
+function replaceRowsByKey(existing, incoming, keyFn){
+  const incomingKeys = new Set((incoming||[]).map(keyFn));
+  return [
+    ...(existing||[]).filter(row=>!incomingKeys.has(keyFn(row))),
+    ...(incoming||[])
+  ];
+}
+
+// v59: Algemene opslag voor oude én nieuwe accounts.
+// Niet verwijderen + invoegen, maar upsert: bestaande regels worden bijgewerkt,
+// nieuwe regels worden aangemaakt. Dit voorkomt problemen bij oude lege records.
+async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
+  if(!rows || !rows.length) return [];
+  const cleanRows = rows.map(row => ({...row, participant_id: pid}));
+  const conflictTarget = keyColumn === 'match_id'
+    ? 'participant_id,match_id'
+    : 'participant_id,question_id';
+
+  const saved = await db
+    .from(table)
+    .upsert(cleanRows, { onConflict: conflictTarget })
+    .select();
+
+  if(saved.error){
+    throw new Error(`${table}: opslaan/updaten is mislukt. ${saved.error.message}`);
+  }
+
+  const keys = [...new Set(cleanRows.map(r => String(r[keyColumn])))];
+  const verify = await db
+    .from(table)
+    .select('*')
+    .eq('participant_id', pid)
+    .in(keyColumn, keys);
+
+  if(verify.error){
+    throw new Error(`${table}: controle na opslaan mislukt. ${verify.error.message}`);
+  }
+  return verify.data || [];
+}
+function clearOldLocalParticipantCache(pid){
+  if(!pid || pid==='admin') return;
+  try{
+    localStorage.removeItem(`wk_predictions_${pid}`);
+    localStorage.removeItem(`wk_bonus_answers_${pid}`);
+  }catch(e){}
+}
+
+function deletedParticipantsGlobal(){
+  const raw = state.settings.deleted_participants || [];
+  if(Array.isArray(raw)) return raw;
+  try{return JSON.parse(raw || "[]");}catch(e){return [];}
+}
+function deletedParticipantsAll(){
+  const local = JSON.parse(localStorage.getItem('wk_deleted_participants') || '[]');
+  return [...new Set([...local, ...deletedParticipantsGlobal()])];
+}
+async function saveDeletedParticipantsGlobal(ids){
+  const clean=[...new Set((ids||[]).filter(Boolean))];
+  state.settings.deleted_participants = clean;
+  localStorage.setItem('wk_deleted_participants', JSON.stringify(clean));
+  return await db.from("app_settings").upsert({key:"deleted_participants", value:JSON.stringify(clean)},{onConflict:"key"});
+}
+async function syncLocalDeletedParticipantsToGlobal(){
+  const local = JSON.parse(localStorage.getItem('wk_deleted_participants') || '[]');
+  if(!local.length) return;
+  const merged = deletedParticipantsAll();
+  const global = deletedParticipantsGlobal();
+  if(merged.length !== global.length || merged.some(id=>!global.includes(id))){
+    await saveDeletedParticipantsGlobal(merged);
+  }
+}
+function participantIsDeleted(p){
+  return !p || p.status==="deleted" || p.password==="deleted" || String(p.email||"").startsWith("deleted_") || deletedParticipantsAll().includes(p.id);
+}
+
+function markSaved(btn,text="Opgeslagen"){
+  if(!btn) return;
+  btn.classList.add("saved");
+  btn.textContent=text;
+}
+
+async function loadAll(){
+  try{
+    const [p, pr, r, b, ob, msg, set] = await Promise.all([
+      db.from("participants").select("*").order("created_at"),
+      db.from("predictions").select("*"),
+      db.from("official_results").select("*"),
+      db.from("bonus_answers").select("*"),
+      db.from("official_bonus_answers").select("*"),
+      db.from("messages").select("*").order("created_at", {ascending:false}).limit(80),
+      db.from("app_settings").select("*")
+    ]);
+    const loadError = [p, pr, r, b, ob, msg, set].find(x=>x && x.error)?.error;
+    if(loadError) throw loadError;
+
+    // Eerst instellingen laden, vooral de globale verwijderlijst.
+    // Anders kunnen nieuwe gebruikers oude verwijderde deelnemers nog zien.
+    (set.data||[]).forEach(s=>{
+      if(s.key==="deleted_participants"){
+        try{state.settings[s.key]=Array.isArray(s.value)?s.value:JSON.parse(s.value || "[]");}catch(e){state.settings[s.key]=[];}
+      }else{
+        state.settings[s.key]=typeof s.value==="boolean"?s.value:String(s.value)==="true";
+      }
+    });
+    await syncLocalDeletedParticipantsToGlobal();
+
+    // Daarna pas deelnemers en alle gekoppelde data filteren.
+    state.participants=(p.data||[]).filter(x=>!participantIsDeleted(x));
+    const activeIds = new Set(state.participants.map(x=>x.id));
+    state.predictions=(pr.data||[]).filter(x=>activeIds.has(x.participant_id));
+    state.results=r.data||[];
+    state.bonus=(b.data||[]).filter(x=>!x.participant_id || activeIds.has(x.participant_id));
+    state.officialBonus=ob.data||[];
+    state.messages=(msg.data||[]).filter(x=>!x.participant_id || activeIds.has(x.participant_id));
+
+    if(state.currentParticipant){
+      const fresh=state.participants.find(p=>p.id===state.currentParticipant.id);
+      if(fresh){
+        state.currentParticipant=fresh;
+        localStorage.setItem("wk_current_participant", JSON.stringify(fresh));
+      }else{
+        state.currentParticipant=null;
+        localStorage.removeItem("wk_current_participant");
+      }
+    }
+    renderAll();
+    if(!hasAccess()) showTab("signup");
+  }catch(e){
+    document.getElementById("accessBox").innerHTML=`<div class="notice">⚠️ Databasefout: ${esc(e.message || e)}. Controleer of de SQL-tabellen en policies zijn aangemaakt.</div>`;
+  }
+}
+
+function resultMap(){const map={}; state.results.forEach(r=>map[String(r.match_id)]=r); return map;}
+
+function predictionFilled(row){
+  return row && row.home_goals!==null && row.home_goals!==undefined && row.home_goals!=='' &&
+         row.away_goals!==null && row.away_goals!==undefined && row.away_goals!=='' &&
+         !Number.isNaN(Number(row.home_goals)) && !Number.isNaN(Number(row.away_goals));
+}
+function newerRow(a,b){
+  const da = new Date(a?.updated_at || a?.created_at || 0).getTime() || 0;
+  const db = new Date(b?.updated_at || b?.created_at || 0).getTime() || 0;
+  return db >= da ? b : a;
+}
+function betterPredictionRow(existing,row){
+  if(!existing) return row;
+  const eFilled=predictionFilled(existing);
+  const rFilled=predictionFilled(row);
+  if(rFilled && !eFilled) return row;
+  if(!rFilled && eFilled) return existing;
+  return newerRow(existing,row);
+}
+function answerFilled(row){
+  return row && row.answer!==null && row.answer!==undefined && String(row.answer).trim()!=='';
+}
+function betterAnswerRow(existing,row){
+  if(!existing) return row;
+  const eFilled=answerFilled(existing);
+  const rFilled=answerFilled(row);
+  if(rFilled && !eFilled) return row;
+  if(!rFilled && eFilled) return existing;
+  if(rFilled && eFilled) return newerRow(existing,row);
+  return existing;
+}
+
+function predictionMap(pid){
+  const map={};
+  getMergedPredictionRows(pid).forEach(p=>{
+    const key=String(p.match_id);
+    map[key]=betterPredictionRow(map[key],p);
+  });
+  return map;
+}
+function officialBonusMap(){
+  const rows={};
+  state.officialBonus.forEach(b=>{rows[b.question_id]=betterAnswerRow(rows[b.question_id],b);});
+  const map={};
+  Object.keys(rows).forEach(k=>map[k]=rows[k].answer);
+  return map;
+}
+function participantBonusMap(pid){
+  const map={};
+  getMergedBonusRows(pid).forEach(b=>{
+    const qid=b.question_id;
+    const newAnswer=b.answer!=null && String(b.answer).trim()!=='' ? String(b.answer).trim() : null;
+    const existing=map[qid];
+    if(!existing && newAnswer) map[qid]=newAnswer;
+    else if(existing && !newAnswer) map[qid]=existing;
+    else if(newAnswer) map[qid]=newAnswer;
+  });
+  return map;
+}
+
+function otherPredictionsHTML(matchId, isKnockout=false){
+  const approved=state.participants.filter(p=>p.status==="approved" && !participantIsDeleted(p));
+  const chips=[];
+  approved.forEach(p=>{
+    const pred=predictionMap(p.id)[String(matchId)];
+    if(!pred || pred.home_goals==null || pred.away_goals==null) return;
+    let text=`${esc(p.name)}: ${esc(pred.home_goals)}-${esc(pred.away_goals)}`;
+    if(isKnockout){
+      const picks=participantKnockoutTeams(p.id)[String(matchId)] || {};
+      const home=picks.home ? esc(picks.home) : '';
+      const away=picks.away ? esc(picks.away) : '';
+      if(home || away) text=`${esc(p.name)}: ${home || '?'} ${esc(pred.home_goals)}-${esc(pred.away_goals)} ${away || '?'}`;
+    }
+    chips.push(`<span class="other-pred-chip">${text}</span>`);
+  });
+  if(!chips.length) return `<div class="other-preds"><strong>Andere voorspellingen:</strong> nog niemand ingevuld</div>`;
+  return `<div class="other-preds"><strong>Andere voorspellingen:</strong> ${chips.join('')}</div>`;
+}
+
+function outcome(h,a){if(h>a)return "H"; if(h<a)return "A"; return "D";}
+function scorePrediction(pred,res){
+  if(!pred || !res || pred.home_goals==null || pred.away_goals==null || res.home_goals==null || res.away_goals==null) return 0;
+  const ph=Number(pred.home_goals), pa=Number(pred.away_goals), rh=Number(res.home_goals), ra=Number(res.away_goals);
+  if([ph,pa,rh,ra].some(n=>Number.isNaN(n))) return 0;
+  if(ph===rh && pa===ra) return 6;
+  if(outcome(ph,pa)===outcome(rh,ra)) return 3;
+  return 0;
+}
+function scoreBonus(pid){const official=officialBonusMap(); const ans=participantBonusMap(pid); let total=0;
+  bonusQuestions.forEach(q=>{if(official[q.id] && ans[q.id] && official[q.id].trim().toLowerCase()===ans[q.id].trim().toLowerCase()) total += 10;});
+  return total;
+}
+function participantJokers(pid){
+  const ans=participantBonusMap(pid);
+  return Object.keys(ans).filter(k=>k.startsWith('joker_') && ans[k]==='true').map(k=>String(k.replace('joker_','')));
+}
+function scoreRange(preds,res,ids,pid=null){
+  const jokers = pid ? participantJokers(pid) : [];
+  return ids.reduce((sum,id)=>{
+    const base = scorePrediction(preds[String(id)], res[String(id)]);
+    return sum + (jokers.includes(String(id)) ? base*2 : base);
+  }, 0);
+}
+function normName(v){return String(v||"").trim().toLowerCase();}
+function allCountryNames(){return [...new Set(matches.flatMap(m=>[m.home.name,m.away.name]))].sort();}
+function countrySelect(id,value="", options=null, attrs="", optionLabels={}){
+  const names=(options&&options.length?options:allCountryNames()).filter(Boolean);
+  const unique=[...new Set(names)].sort();
+  const isKo=id.startsWith("pred-ko-") || id.startsWith("ko-");
+  let extra=attrs;
+  if(id.startsWith("pred-ko-")){
+    extra=` class="ko-country-select" onchange="updateKnockoutSelectLocks(); updateCountryFlag(this)" ${attrs}`;
+  }else if(id.startsWith("ko-")){
+    extra=` class="ko-country-select" onchange="updateCountryFlag(this); autoSaveAdminKnockoutTeamsFromSelect(this)" ${attrs}`;
+  }
+  const selectedLabel = optionLabels[value] ? `${value} — ${optionLabels[value]}` : '';
+  const select=`<select id="${id}" ${extra}><option value="">Kies land</option>${unique.map(n=>{
+    const extraLabel=optionLabels[n] || '';
+    const label=extraLabel?`${n} — ${extraLabel}`:n;
+    return `<option value="${esc(n)}" data-ko-label="${esc(extraLabel)}" ${n===value?"selected":""}>${esc(label)}</option>`;
+  }).join("")}</select>`;
+  if(!isKo) return select;
+  return `<div class="ko-country-row">${countryFlagImg(value, `flag-${id}`)}${select}</div><div id="label-${id}" class="ko-choice-label">${selectedLabel?esc(selectedLabel):''}</div>`;
+}
+function participantPredictedPlaceLabel(pid, countryName){
+  const group=matches.find(m=>m.home.name===countryName || m.away.name===countryName)?.group;
+  if(!group) return '';
+  const rows=getPredictionGroupStandings(group,pid);
+  const idx=rows.findIndex(t=>t.name===countryName);
+  if(idx<0) return '';
+  return `in jouw poulevoorspelling: ${idx+1}e ${groupOrderName(group)}`;
+}
+function participantOptionLabels(pid, options){
+  const labels={};
+  (options||[]).forEach(name=>{const label=participantPredictedPlaceLabel(pid,name); if(label) labels[name]=label;});
+  return labels;
+}
+
+function resultWinnerLoserLabels(picks, score, matchId){
+  const labels={};
+  const home=picks?.home || '';
+  const away=picks?.away || '';
+  if(!home || !away) return labels;
+
+  const hg = score?.home_goals;
+  const ag = score?.away_goals;
+  const hasScore = hg!==undefined && ag!==undefined && hg!==null && ag!==null && hg!=='' && ag!=='' && !Number.isNaN(Number(hg)) && !Number.isNaN(Number(ag));
+
+  if(!hasScore){
+    labels[home] = `wedstrijd ${matchId}: boven/thuis`;
+    labels[away] = `wedstrijd ${matchId}: onder/uit`;
+    return labels;
+  }
+
+  if(Number(hg) > Number(ag)){
+    labels[home] = `wint wedstrijd ${matchId}`;
+    labels[away] = `verliest wedstrijd ${matchId}`;
+  }else if(Number(hg) < Number(ag)){
+    labels[away] = `wint wedstrijd ${matchId}`;
+    labels[home] = `verliest wedstrijd ${matchId}`;
+  }else{
+    labels[home] = `gelijk in wedstrijd ${matchId} - kies zelf of dit team doorgaat`;
+    labels[away] = `gelijk in wedstrijd ${matchId} - kies zelf of dit team doorgaat`;
+  }
+  return labels;
+}
+function participantWinnerLoserOptionLabels(source, pid){
+  if(!source || typeof source==='object') return {};
+  const picks = participantKnockoutTeams(pid)[String(source)] || {};
+  const pred = predictionMap(pid)[String(source)] || {};
+  return resultWinnerLoserLabels(picks, pred, source);
+}
+function officialWinnerLoserOptionLabels(source){
+  if(!source || typeof source==='object') return {};
+  const picks = officialKnockoutTeams()[String(source)] || {};
+  const res = resultMap()[String(source)] || {};
+  return resultWinnerLoserLabels(picks, res, source);
+}
+function mergeOptionLabels(){
+  const merged={};
+  [...arguments].forEach(obj=>Object.assign(merged, obj||{}));
+  return merged;
+}
+function groupTeamNames(groupCode){
+  return [...new Set(matches.filter(m=>m.group===`Groep ${groupCode}`).flatMap(m=>[m.home.name,m.away.name]))];
+}
+function slotPossibleNames(slot){
+  if(!slot) return [];
+  if(slot.type==='place') return groupTeamNames(slot.group);
+  if(slot.type==='third') return slot.allowed.split('/').flatMap(code=>groupTeamNames(code));
+  return [];
+}
+function possibleNamesForSource(source){
+  const cache={};
+  function namesForMatch(id){
+    if(cache[id]) return cache[id];
+    const first=knockoutFirstRound.find(x=>x.id===id);
+    if(first){
+      cache[id]=[...new Set([...slotPossibleNames(first.home), ...slotPossibleNames(first.away)])];
+      return cache[id];
+    }
+    const later=knockoutNextRounds.flatMap(r=>r.fixtures).find(x=>x.id===id);
+    if(later){
+      cache[id]=[...new Set([...namesForMatch(later.home), ...namesForMatch(later.away)])];
+      return cache[id];
+    }
+    return [];
+  }
+  if(source && typeof source==='object') return slotPossibleNames(source);
+  return namesForMatch(source);
+}
+function fixtureSidePossibleNames(f, side){
+  const source = side==='home' ? f.home : f.away;
+  return [...new Set(possibleNamesForSource(source))];
+}
+function participantPredictedTeamForSlot(slot, pid){
+  if(!slot || !pid) return [];
+
+  // Belangrijk: de Laatste 32 moet gebaseerd zijn op de poulestand van déze deelnemer.
+  // Dus bij "1e Poule A" tonen we het land dat deze deelnemer zelf als 1e heeft voorspeld.
+  if(slot.type==='place'){
+    const rows=getPredictionGroupStandings(`Groep ${slot.group}`, pid);
+    const team=rows[Number(slot.place)-1];
+    return team?.name ? [team.name] : [];
+  }
+
+  // Voor beste nummers 3 gebruiken we ook de voorspelde poulestanden van deze deelnemer.
+  if(slot.type==='third'){
+    const allowedCodes=slot.allowed.split('/');
+    const predictedThirds=[...new Set(matches.map(m=>m.group))].map(group=>{
+      const rows=getPredictionGroupStandings(group, pid);
+      const team=rows[2];
+      return team ? {...team, groupCode:groupCode(group)} : null;
+    }).filter(Boolean).sort((a,b)=>b.points-a.points||b.gd-a.gd||b.gf-a.gf||a.name.localeCompare(b.name));
+
+    const qualified=predictedThirds.slice(0,8).filter(t=>allowedCodes.includes(t.groupCode)).map(t=>t.name);
+    if(qualified.length) return [...new Set(qualified)];
+
+    // Fallback zolang iemand de poule nog niet compleet heeft ingevuld.
+    const fallback=allowedCodes.map(code=>{
+      const rows=getPredictionGroupStandings(`Groep ${code}`, pid);
+      return rows[2]?.name;
+    }).filter(Boolean);
+    return [...new Set(fallback)];
+  }
+
+  return [];
+}
+function participantPossibleNamesForSource(source, pid){
+  // Eerste ronde: kies alleen uit het land/de landen die volgens de poulevoorspelling
+  // van deze deelnemer op die schema-plek staan. Niet uit de algemene landenlijst.
+  if(source && typeof source==='object') return participantPredictedTeamForSlot(source, pid);
+
+  // Latere rondes: je mag alleen kiezen uit de 2 landen die je in de vorige wedstrijd hebt ingevuld.
+  // Dus bij "Winnaar wedstrijd 73" komen alleen de thuis/uit landen van wedstrijd 73 terug.
+  const picks = participantKnockoutTeams(pid)[String(source)] || {};
+  const chosen=[picks.home,picks.away].filter(Boolean);
+  if(chosen.length>=2) return [...new Set(chosen)];
+  return [];
+}
+function participantFixtureSidePossibleNames(f, side, pid){
+  const source = side==='home' ? f.home : f.away;
+  return [...new Set(participantPossibleNamesForSource(source,pid))];
+}
+function participantKoMatchFilled(pid,id){
+  const picks=participantKnockoutTeams(pid)[String(id)] || {};
+  const pred=predictionMap(pid)[String(id)] || {};
+  return !!picks.home && !!picks.away && pred.home_goals!=null && pred.away_goals!=null;
+}
+function participantKoRoundComplete(pid, ids){
+  return ids.every(id=>participantKoMatchFilled(pid,id));
+}
+function participantRoundUnlockedForMatch(pid, id){
+  if(knockoutFirstRound.some(f=>String(f.id)===String(id))) return true;
+  const laatste32Ids = knockoutFirstRound.map(f=>f.id);
+  const achtsteIds = [89,90,91,92,93,94,95,96];
+  const kwartIds = [97,98,99,100];
+  const halveIds = [101,102];
+  if(achtsteIds.includes(Number(id))) return participantKoRoundComplete(pid, laatste32Ids);
+  if(kwartIds.includes(Number(id))) return participantKoRoundComplete(pid, achtsteIds);
+  if(halveIds.includes(Number(id))) return participantKoRoundComplete(pid, kwartIds);
+  if(Number(id)===104) return participantKoRoundComplete(pid, halveIds);
+  return true;
+}
+function unlockNoticeForMatch(id){
+  const n=Number(id);
+  if(n>=89 && n<=96) return 'Vul eerst alle wedstrijden van Laatste 32 volledig in en sla ze op. Daarna kun je de achtste finales kiezen.';
+  if(n>=97 && n<=100) return 'Vul eerst alle achtste finales volledig in en sla ze op. Daarna kun je de kwartfinales kiezen.';
+  if(n>=101 && n<=102) return 'Vul eerst alle kwartfinales volledig in en sla ze op. Daarna kun je de halve finales kiezen.';
+  if(n===104) return 'Vul eerst alle halve finales volledig in en sla ze op. Daarna kun je de finale kiezen.';
+  return '';
+}
+function usedFirstRoundGroupPicks(pid, currentId){
+  const picked={};
+  const all=participantKnockoutTeams(pid);
+  knockoutFirstRound.forEach(f=>{
+    if(String(f.id)===String(currentId)) return;
+    ['home','away'].forEach(side=>{
+      const src=f[side]; const val=(all[String(f.id)]||{})[side];
+      if(val && src && src.type==='place'){ picked[`${src.group}_${src.place}`]=val; }
+    });
+  });
+  return picked;
+}
+function fixturePossibleNames(f){
+  return [...new Set([...fixtureSidePossibleNames(f,'home'), ...fixtureSidePossibleNames(f,'away')])];
+}
+function slotLabel(slot){
+  if(!slot) return 'Nog te bepalen';
+  if(slot.type==='place') return `${slot.place}e Poule ${slot.group}`;
+  if(slot.type==='third') return `Beste nummer 3 uit poule ${slot.allowed}`;
+  return String(slot);
+}
+function sourceRouteLabel(source){
+  if(source && typeof source==='object') return slotLabel(source);
+  return `Winnaar wedstrijd ${source}`;
+}
+function fixtureRouteLabel(f){
+  return `${sourceRouteLabel(f.home)} tegen ${sourceRouteLabel(f.away)}`;
+}
+function participantKnockoutTeams(pid){
+  const ans=participantBonusMap(pid);
+  const map={};
+  Object.keys(ans).forEach(k=>{
+    const m=k.match(/^ko_(\d+)_(home|away)$/);
+    if(m){
+      if(!map[m[1]]) map[m[1]]={};
+      map[m[1]][m[2]]=ans[k];
+    }
+  });
+  return map;
+}
+
+function officialKnockoutTeams(){
+  const off=officialBonusMap();
+  const map={};
+  Object.keys(off).forEach(k=>{
+    const m=k.match(/^official_ko_(\d+)_(home|away)$/);
+    if(m){
+      if(!map[m[1]]) map[m[1]]={};
+      map[m[1]][m[2]]=off[k];
+    }
+  });
+  return map;
+}
+function officialPossibleNamesForSource(source){
+  if(source && typeof source==='object') return slotPossibleNames(source);
+  const picks=officialKnockoutTeams()[String(source)] || {};
+  return [...new Set([picks.home,picks.away].filter(Boolean))];
+}
+function officialFixtureSidePossibleNames(f, side){
+  const source = side==='home' ? f.home : f.away;
+  return [...new Set(officialPossibleNamesForSource(source))];
+}
+function hasOfficialResult(id){
+  const r=resultMap()[String(id)];
+  return !!r && r.home_goals!=null && r.away_goals!=null && !Number.isNaN(Number(r.home_goals)) && !Number.isNaN(Number(r.away_goals));
+}
+function groupComplete(group){
+  return matches.filter(m=>m.group===group).every(m=>hasOfficialResult(m.id));
+}
+function allGroupMatchesComplete(){
+  return allGroups().every(groupComplete);
+}
+function completedGroupIds(){
+  return matches.filter(m=>groupComplete(m.group)).map(m=>m.id);
+}
+function roundComplete(ids){
+  return ids.every(id=>hasOfficialResult(id));
+}
+function participantScore(pid){
+  const res=resultMap();
+  const preds=predictionMap(pid);
+
+  // Vanaf v19: alle punten tellen direct zodra beheer iets officieel invult.
+  // Poulewedstrijden tellen per wedstrijd zodra de officiële uitslag is ingevuld.
+  const poulePoints = scoreRange(preds,res,matches.map(m=>m.id), pid);
+
+  const laatste32Ids = knockoutFirstRound.map(f=>f.id);
+  const achtsteIds = [89,90,91,92,93,94,95,96];
+  const kwartIds = [97,98,99,100];
+  const halveIds = [101,102];
+  const finaleIds = [104];
+
+  // Knock-outpunten tellen direct per wedstrijd:
+  // landen/schema-punten zodra beheer de landen invult,
+  // uitslagpunten zodra beheer de uitslag invult.
+  const laatste32Points = scoreKnockoutRound(pid, laatste32Ids, 'laatste32');
+  const achtstePoints = scoreKnockoutRound(pid, achtsteIds, 'achtste');
+  const kwartPoints = scoreKnockoutRound(pid, kwartIds, 'kwart');
+  const halvePoints = scoreKnockoutRound(pid, halveIds, 'halve');
+  const finalePoints = scoreKnockoutRound(pid, finaleIds, 'finale');
+  const bonusPoints = scoreBonus(pid);
+  const total = poulePoints + laatste32Points + achtstePoints + kwartPoints + halvePoints + finalePoints + bonusPoints;
+  return {poulePoints, laatste32Points, achtstePoints, kwartPoints, halvePoints, finalePoints, bonusPoints, total, matchPoints:poulePoints};
+}
+function renderAccessBox(){
+  const el=document.getElementById("accessBox");
+  const cur=state.currentParticipant;
+  const fresh=cur?state.participants.find(p=>p.id===cur.id):null;
+  if(state.adminUnlocked){el.innerHTML=`<div class="notice">🔐 Beheerder actief: je hebt toegang tot alles.</div>`;return;}
+  if(!fresh){el.innerHTML=`<div class="notice">🔒 Meld je aan of kies je goedgekeurde naam. Na goedkeuring kun je deelnemen.</div>`;return;}
+  if(fresh.status!=="approved"){el.innerHTML=`<div class="notice">⏳ Je aanmelding staat nog op: <strong>${esc(fresh.status)}</strong>. Wacht op goedkeuring.</div>`;return;}
+  
+  el.innerHTML=`<div class="notice">✅ Ingelogd als <strong>${esc(fresh.name)}</strong>. Je hebt toegang tot de poule.</div>`;
+}
+function rankMovementHTML(participantId, currentIndex){
+  let oldOrder=[];
+  try{oldOrder=JSON.parse(localStorage.getItem("wk_last_standings_order") || "[]");}catch(e){oldOrder=[];}
+  if(!oldOrder.length) return `<span class="rank-new">nieuw</span>`;
+  const oldIndex=oldOrder.indexOf(participantId);
+  if(oldIndex<0) return `<span class="rank-new">nieuw</span>`;
+
+  const diff=oldIndex-currentIndex;
+  if(diff===0) return `<span class="rank-same" title="Gelijk gebleven"></span>`;
+
+  const count=Math.min(Math.abs(diff), 3);
+
+  function chevron(direction){
+    return `<span class="rank-chevron ${direction}">
+      <svg viewBox="0 0 100 60" aria-hidden="true">
+        <path d="M10 10 L50 45 L90 10 L90 25 L50 60 L10 25 Z" fill="currentColor"
+          transform="${direction==='up' ? 'translate(0,60) scale(1,-1)' : ''}"></path>
+      </svg>
+    </span>`;
+  }
+
+  if(diff>0){
+    return `<span class="rank-move" title="${diff} plek${diff===1?'':'ken'} gestegen">${Array(count).fill(chevron('up')).join('')}</span>`;
+  }
+
+  const down=Math.abs(diff);
+  return `<span class="rank-move" title="${down} plek${down===1?'':'ken'} gezakt">${Array(count).fill(chevron('down')).join('')}</span>`;
+}
+function saveStandingsOrder(rows){
+  localStorage.setItem("wk_last_standings_order", JSON.stringify(rows.map(p=>p.id)));
+}
+function renderStandings(){
+  if(!hasAccess()){document.getElementById("standings").innerHTML=`<div class="notice">🔒 Je ziet de stand pas na goedkeuring en betaling.</div>`;return;}
+  const approved=state.participants.filter(p=>p.status==="approved");
+  const rows=approved.map(p=>({...p, ...participantScore(p.id)})).sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));
+  const podium=rows.slice(0,3);
+  document.getElementById("standings").innerHTML = `
+    <div class="notice">Positieverschil sinds de vorige berekende stand: groene pijlen = gestegen, rode pijlen = gezakt, oranje streep = gelijk gebleven.<br>Alle punten worden direct opgeteld zodra beheer iets officieel invult.</div>
+    <div class="podium">${[0,1,2].map(i=>{const p=podium[i]; const cls=i===0?"gold":i===1?"silver":"bronze"; return `<div class="podium-card ${cls}"><h3>${i+1}e plek</h3><strong>${p?esc(p.name):"Nog leeg"}</strong><div class="score-number">${p?p.total:0} punten</div></div>`}).join("")}</div>
+    <table class="table"><thead><tr><th>#</th><th>↕</th><th>Naam</th><th>Betaald</th><th>Poule</th><th>Laatste 32</th><th>Achtste</th><th>Kwart</th><th>Halve</th><th>Finale</th><th>Bonus</th><th>Totaal</th></tr></thead><tbody>
+    ${rows.map((p,i)=>`<tr><td>${i+1}</td><td>${rankMovementHTML(p.id,i)}</td><td>${esc(p.name)}</td><td><span class="status-pill ${p.paid?"paid":"unpaid"}">${p.paid?"Betaald":"Niet betaald"}</span></td><td>${p.poulePoints}</td><td>${p.laatste32Points}</td><td>${p.achtstePoints}</td><td>${p.kwartPoints}</td><td>${p.halvePoints}</td><td>${p.finalePoints}</td><td>${p.bonusPoints}</td><td><strong>${p.total}</strong></td></tr>`).join("") || `<tr><td colspan="12">Nog geen goedgekeurde deelnemers.</td></tr>`}
+    </tbody></table>`;
+  saveStandingsOrder(rows);
+}
+function renderSignup(){
+  const open = !!state.settings.registration_open;
+  const approved=state.participants.filter(p=>p.status==="approved");
+  const loginBox=`<div class="access-box"><h3>Ik ben al goedgekeurd</h3><p class="small">Kies je naam en vul je wachtwoord in. Je krijgt toegang zodra je bent goedgekeurd.</p><label>Naam</label><select id="loginPlayer"><option value="">Kies je naam</option>${approved.map(p=>`<option value="${p.id}" ${state.currentParticipant&&state.currentParticipant.id===p.id?"selected":""}>${esc(p.name)}</option>`).join("")}</select><label>Wachtwoord</label><input id="loginPassword" type="password" placeholder="Je wachtwoord"><button class="save" onclick="loginWithPassword()">Inloggen</button></div>`;
+  document.getElementById("signupBox").innerHTML = loginBox + (open ? `
+    <div class="notice">Inschrijven staat open. Na goedkeuring en betaling kun je deelnemen.</div>
+    <label>Naam</label><input id="suName" placeholder="Je naam">
+    <label>E-mailadres</label><input id="suEmail" type="email" placeholder="naam@email.nl">
+    <label>Wachtwoord</label><input id="suPassword" type="password" placeholder="Kies een wachtwoord">
+    <button class="save" onclick="signup(this)">Aanmelden</button>
+  ` : `<div class="notice">Inschrijven is nu gesloten.</div>`);
+}
+async function signup(btn){
+  const name=document.getElementById("suName").value.trim();
+  const email=document.getElementById("suEmail").value.trim().toLowerCase();
+  const password=document.getElementById("suPassword").value.trim();
+  if(!name||!email.includes("@")) return alert("Vul een naam en geldig e-mailadres in.");
+  if(password.length < 4) return alert("Kies een wachtwoord van minimaal 4 tekens.");
+  const {error} = await db.from("participants").insert({name,email,password,status:"pending",paid:false});
+  if(error) return alert("Aanmelden mislukt: " + error.message);
+  btn.classList.add("saved"); btn.textContent="Aangemeld";
+  alert("Je bent aangemeld. De beheerder moet je nu goedkeuren en op betaald zetten.");
+  await loadAll();
+}
+
+function groupTeams(group){
+  const map={};
+  matches.filter(m=>m.group===group).forEach(m=>{
+    [m.home,m.away].forEach(t=>{if(!map[t.name]) map[t.name]={name:t.name, flag:t.flag, group, played:0, won:0, draw:0, lost:0, gf:0, ga:0, gd:0, points:0};});
+  });
+  return map;
+}
+function getGroupStandingsFromMap(group, scoreMap){
+  const table=groupTeams(group);
+  matches.filter(m=>m.group===group).forEach(m=>{
+    const r=scoreMap[String(m.id)];
+    if(!r || r.home_goals==null || r.away_goals==null) return;
+    const h=table[m.home.name], a=table[m.away.name];
+    const hg=Number(r.home_goals), ag=Number(r.away_goals);
+    if(Number.isNaN(hg) || Number.isNaN(ag)) return;
+    h.played++; a.played++; h.gf+=hg; h.ga+=ag; a.gf+=ag; a.ga+=hg;
+    if(hg>ag){h.won++; a.lost++; h.points+=3;}
+    else if(hg<ag){a.won++; h.lost++; a.points+=3;}
+    else{h.draw++; a.draw++; h.points++; a.points++;}
+  });
+  Object.values(table).forEach(t=>t.gd=t.gf-t.ga);
+  return Object.values(table).sort((a,b)=>b.points-a.points||b.gd-a.gd||b.gf-a.gf||a.name.localeCompare(b.name));
+}
+function getGroupStandings(group){
+  return getGroupStandingsFromMap(group, resultMap());
+}
+function getPredictionGroupStandings(group, participantId){
+  return getGroupStandingsFromMap(group, predictionMap(participantId));
+}
+function renderGroupStandings(group, rows){
+  rows = rows || getGroupStandings(group);
+  return `<div class="group-standings"><table class="table"><thead><tr><th>#</th><th>Land</th><th>G</th><th>W</th><th>G</th><th>V</th><th>DV</th><th>DT</th><th>+/-</th><th>Pnt</th></tr></thead><tbody>${rows.map((t,i)=>`<tr><td>${i+1}</td><td>${teamHTML(t)}</td><td>${t.played}</td><td>${t.won}</td><td>${t.draw}</td><td>${t.lost}</td><td>${t.gf}</td><td>${t.ga}</td><td>${t.gd}</td><td><strong>${t.points}</strong></td></tr>`).join("")}</tbody></table></div>`;
+}
+function groupCode(group){return group.replace('Groep ','');}
+function groupByCode(code){return `Groep ${code}`;}
+function getGroupPlace(code, place){
+  const group=groupByCode(code);
+  if(!groupComplete(group)) return null;
+  const rows=getGroupStandings(group);
+  const t=rows[place-1];
+  return t?{...t, seed:`${place}e Poule ${code}`} : null;
+}
+function thirdPlaceCandidates(){
+  const groups=[...new Set(matches.map(m=>m.group))];
+  return groups.filter(groupComplete).map(g=>{
+    const rows=getGroupStandings(g);
+    const code=groupCode(g);
+    return rows[2]?{...rows[2], groupCode:code, seed:`3e Poule ${code}`} : null;
+  }).filter(Boolean).sort((a,b)=>b.points-a.points||b.gd-a.gd||b.gf-a.gf||a.name.localeCompare(b.name));
+}
+function qualifiedThirds(){return thirdPlaceCandidates().slice(0,8);}
+function pickThird(allowed, usedThirds){
+  const allowedCodes=allowed.split('/');
+  const t=qualifiedThirds().find(x=>allowedCodes.includes(x.groupCode) && !usedThirds.has(x.groupCode));
+  if(t) usedThirds.add(t.groupCode);
+  return t || {name:`3e poule ${allowed}`, flag:"", seed:"Beste nummer 3"};
+}
+const knockoutFirstRound = [
+  {id:73, home:{type:'place', group:'A', place:2}, away:{type:'place', group:'B', place:2}},
+  {id:74, home:{type:'place', group:'E', place:1}, away:{type:'third', allowed:'A/B/C/D/F'}},
+  {id:75, home:{type:'place', group:'F', place:1}, away:{type:'place', group:'C', place:2}},
+  {id:76, home:{type:'place', group:'C', place:1}, away:{type:'place', group:'F', place:2}},
+  {id:77, home:{type:'place', group:'I', place:1}, away:{type:'third', allowed:'C/D/F/G/H'}},
+  {id:78, home:{type:'place', group:'E', place:2}, away:{type:'place', group:'I', place:2}},
+  {id:79, home:{type:'place', group:'A', place:1}, away:{type:'third', allowed:'C/E/F/H/I'}},
+  {id:80, home:{type:'place', group:'L', place:1}, away:{type:'third', allowed:'E/H/I/J/K'}},
+  {id:81, home:{type:'place', group:'D', place:1}, away:{type:'third', allowed:'B/E/F/I/J'}},
+  {id:82, home:{type:'place', group:'G', place:1}, away:{type:'third', allowed:'A/E/H/I/J'}},
+  {id:83, home:{type:'place', group:'K', place:2}, away:{type:'place', group:'L', place:2}},
+  {id:84, home:{type:'place', group:'H', place:1}, away:{type:'place', group:'J', place:2}},
+  {id:85, home:{type:'place', group:'B', place:1}, away:{type:'third', allowed:'E/F/G/I/J'}},
+  {id:86, home:{type:'place', group:'J', place:1}, away:{type:'place', group:'H', place:2}},
+  {id:87, home:{type:'place', group:'K', place:1}, away:{type:'third', allowed:'D/E/I/J/L'}},
+  {id:88, home:{type:'place', group:'D', place:2}, away:{type:'place', group:'G', place:2}}
+];
+const knockoutNextRounds = [
+  {name:'Achtste finales', fixtures:[{id:89,home:73,away:75},{id:90,home:74,away:77},{id:91,home:76,away:78},{id:92,home:79,away:80},{id:93,home:83,away:84},{id:94,home:81,away:82},{id:95,home:86,away:88},{id:96,home:85,away:87}]},
+  {name:'Kwartfinales', fixtures:[{id:97,home:89,away:90},{id:98,home:93,away:94},{id:99,home:91,away:92},{id:100,home:95,away:96}]},
+  {name:'Halve finales', fixtures:[{id:101,home:97,away:98},{id:102,home:99,away:100}]},
+  {name:'Finale', fixtures:[{id:104,home:101,away:102}]}
+];
+function slotTeam(slot, usedThirds){
+  if(slot.type==='place') return getGroupPlace(slot.group, slot.place) || {name:`${slot.place}e Poule ${slot.group}`, flag:"", seed:"Nog te bepalen"};
+  if(slot.type==='third') return pickThird(slot.allowed, usedThirds);
+  return null;
+}
+function knockoutResult(id){return resultMap()[String(id)] || {};}
+function getFixtureById(id){return knockoutFirstRound.find(f=>f.id===id) || knockoutNextRounds.flatMap(r=>r.fixtures).find(f=>f.id===id);}
+function getKnockoutTeams(){
+  const usedThirds=new Set();
+  const teams={};
+  knockoutFirstRound.forEach(f=>{teams[f.id]=[slotTeam(f.home, usedThirds), slotTeam(f.away, usedThirds)];});
+  knockoutNextRounds.forEach(round=>round.fixtures.forEach(f=>{teams[f.id]=[winnerOfMatch(f.home, teams), winnerOfMatch(f.away, teams)];}));
+  return teams;
+}
+function winnerOfMatch(matchId, teams){
+  const pair=teams[matchId];
+  const r=knockoutResult(matchId);
+  if(!pair || r.home_goals==null || r.away_goals==null || Number(r.home_goals)===Number(r.away_goals)) return {name:`Winnaar wedstrijd ${matchId}`, flag:"", seed:""};
+  return Number(r.home_goals)>Number(r.away_goals)?pair[0]:pair[1];
+}
+function knockoutRule(roundKey){
+  // Extra punten bovenop de gewone uitslagpunten (3 voor juiste winnaar/gelijkspel, 6 exact).
+  if(roundKey==='kwart') return {land:4, plek:6, combo:13};
+  if(roundKey==='halve') return {land:6, plek:8, combo:17};
+  if(roundKey==='finale') return {land:10, plek:10, combo:25};
+  // Laatste 32 en achtste finale gebruiken de eerste knock-outtelling.
+  return {land:2, plek:4, combo:9};
+}
+
+function knockoutScorePoints(pred, official){
+  if(!pred || !official || pred.home_goals==null || pred.away_goals==null || official.home_goals==null || official.away_goals==null) return 0;
+  const ph=Number(pred.home_goals), pa=Number(pred.away_goals), rh=Number(official.home_goals), ra=Number(official.away_goals);
+  if([ph,pa,rh,ra].some(n=>Number.isNaN(n))) return 0;
+  if(ph===rh && pa===ra) return 9;
+  if(outcome(ph,pa)===outcome(rh,ra)) return 3;
+  return 0;
+}
+function knockoutRoundKeyForMatch(id){
+  id=Number(id);
+  if(id>=73 && id<=88) return 'laatste32';
+  if(id>=89 && id<=96) return 'achtste';
+  if(id>=97 && id<=100) return 'kwart';
+  if(id>=101 && id<=102) return 'halve';
+  if(id===104) return 'finale';
+  return 'laatste32';
+}
+
+function knockoutIdsForRoundKey(roundKey){
+  if(roundKey==='laatste32') return knockoutFirstRound.map(f=>f.id);
+  if(roundKey==='achtste') return [89,90,91,92,93,94,95,96];
+  if(roundKey==='kwart') return [97,98,99,100];
+  if(roundKey==='halve') return [101,102];
+  if(roundKey==='finale') return [104];
+  return [];
+}
+function officialTeamsForKnockoutMatch(matchId){
+  const officialTeams=officialKnockoutTeams()[String(matchId)] || {};
+  const teams=getKnockoutTeams()[matchId] || [];
+  const home=officialTeams.home || teams[0]?.name || '';
+  const away=officialTeams.away || teams[1]?.name || '';
+  const valid = home && away && !home.startsWith('Winnaar') && !away.startsWith('Winnaar') && !home.includes('poule') && !away.includes('poule');
+  return valid ? {home, away} : {home:'', away:''};
+}
+function officialRoundCountryNames(roundKey){
+  const names=[];
+  knockoutIdsForRoundKey(roundKey).forEach(id=>{
+    const t=officialTeamsForKnockoutMatch(id);
+    if(t.home) names.push(t.home);
+    if(t.away) names.push(t.away);
+  });
+  return names;
+}
+function participantPredictedCountryIsOfficialInRound(country, roundKey){
+  const n=normName(country);
+  if(!n) return false;
+  return officialRoundCountryNames(roundKey).map(normName).includes(n);
+}
+
+function knockoutPointBreakdown(pid, matchId, roundKey=null){
+  roundKey = roundKey || knockoutRoundKeyForMatch(matchId);
+  const preds=predictionMap(pid);
+  const res=resultMap();
+  const predScore=preds[String(matchId)];
+  const official=res[String(matchId)];
+  const hasScore = hasOfficialResult(matchId);
+  let score = hasScore ? knockoutScorePoints(predScore, official) : 0;
+
+  const actual=officialTeamsForKnockoutMatch(matchId);
+  const predicted=participantKnockoutTeams(pid)[String(matchId)] || {};
+  const ph=predicted.home || '';
+  const pa=predicted.away || '';
+  const rule=knockoutRule(roundKey);
+
+  let lands=0, combo=0;
+  let landLabels=[];
+
+  const actualHomeN=normName(actual.home);
+  const actualAwayN=normName(actual.away);
+  const phN=normName(ph);
+  const paN=normName(pa);
+
+  // Beheer is leidend:
+  // - juiste plek = land staat officieel op exact dezelfde boven/thuis of onder/uit plek in deze wedstrijd.
+  // - verkeerde plek = land staat officieel ergens anders in dezelfde ronde.
+  if(phN){
+    if(actualHomeN && phN===actualHomeN){
+      lands += rule.plek;
+      landLabels.push(`${ph} juiste plek ${rule.plek}`);
+    }else if(participantPredictedCountryIsOfficialInRound(ph, roundKey)){
+      lands += rule.land;
+      landLabels.push(`${ph} door, verkeerde plek ${rule.land}`);
+    }
+  }
+  if(paN && paN!==phN){
+    if(actualAwayN && paN===actualAwayN){
+      lands += rule.plek;
+      landLabels.push(`${pa} juiste plek ${rule.plek}`);
+    }else if(participantPredictedCountryIsOfficialInRound(pa, roundKey)){
+      lands += rule.land;
+      landLabels.push(`${pa} door, verkeerde plek ${rule.land}`);
+    }
+  }
+
+  const homePlaceOk = phN && actualHomeN && phN===actualHomeN;
+  const awayPlaceOk = paN && actualAwayN && paN===actualAwayN;
+  if(hasScore && homePlaceOk && awayPlaceOk && predScore && official && Number(predScore.home_goals)===Number(official.home_goals) && Number(predScore.away_goals)===Number(official.away_goals)){
+    combo = rule.combo;
+  }
+
+  let labels=[];
+  if(landLabels.length) labels.push(...landLabels);
+  else labels.push('Nog geen landpunten');
+
+  if(score===9) labels.push('Exacte uitslag 9');
+  else if(score===3) labels.push('Winnaar/gelijkspel goed 3');
+  else if(!hasScore) labels.push('Uitslag nog niet bekend');
+  else labels.push('Uitslag 0');
+
+  if(combo) labels.push(`Alles exact extra ${combo}`);
+
+  return {score, lands, combo, total:score+lands+combo, labels};
+}
+function poulePointBreakdown(pid, matchId){
+  const pred=predictionMap(pid)[String(matchId)];
+  const res=resultMap()[String(matchId)];
+  const base=scorePrediction(pred,res);
+  const joker=participantJokers(pid).includes(String(matchId));
+  const total=joker ? base*2 : base;
+
+  let parts=[];
+  if(base===6) parts.push('Correcte uitslag 6 punten');
+  else if(base===3) parts.push('Winnaar/gelijkspel goed 3 punten');
+  else parts.push('0 punten');
+
+  if(joker){
+    if(base>0) parts.push(`Joker x2: ${base} → ${total} punten`);
+    else parts.push('Joker ingezet, maar 0 x2 blijft 0');
+  }
+
+  return {base, joker, total, label:parts.join(' + ')};
+}
+function participantMatchPointsHTML(pid, matchId, isKnockout=false){
+  if(isKnockout){
+    const b=knockoutPointBreakdown(pid, matchId);
+    return `<div class="notice"><strong>${b.total} punten</strong><br>${b.labels.map(esc).join(' + ')}</div>`;
+  }
+  if(!hasOfficialResult(matchId)){
+    const joker=participantJokers(pid).includes(String(matchId));
+    return `<div class="notice"><strong>0 punten</strong><br>Uitslag nog niet bekend${joker ? ' + Joker staat klaar x2 zodra er punten zijn' : ''}</div>`;
+  }
+  const b=poulePointBreakdown(pid, matchId);
+  return `<div class="notice"><strong>${b.total} punten</strong><br>${esc(b.label)}</div>`;
+}
+
+function scoreKnockoutMatch(pid, matchId, roundKey){
+  return knockoutPointBreakdown(pid, matchId, roundKey).total;
+}
+function scoreKnockoutRound(pid, ids, roundKey){
+  return ids.reduce((sum,id)=>sum + scoreKnockoutMatch(pid,id,roundKey),0);
+}
+function koTeamHTML(t){return t && t.flag ? teamHTML(t) : `<span>${esc(t?.name || 'Nog te bepalen')}</span>`;}
+function roundIsUnlocked(roundName){
+  // Invullen mag altijd; alleen punten worden later vrijgegeven.
+  return true;
+}
+function renderKnockoutMatch(f, teams, mode, predMap={}){
+  const pair=teams[f.id] || [{name:'Nog te bepalen',flag:''},{name:'Nog te bepalen',flag:''}];
+  const values = mode==='admin' ? knockoutResult(f.id) : (predMap[String(f.id)] || {});
+  const prefix = mode==='admin' ? 'ko' : 'pred-ko';
+  const saveFn = mode==='admin' ? `saveKnockoutResult(${f.id}, this)` : `saveKnockoutPrediction(${f.id}, this)`;
+  const label = mode==='admin' ? 'Juiste uitslag opslaan' : 'Voorspelling opslaan';
+  const pid=state.currentParticipant?.id;
+  const picks = pid && pid!=='admin' ? (participantKnockoutTeams(pid)[String(f.id)] || {}) : {};
+  const isFirstRound = knockoutFirstRound.some(x=>String(x.id)===String(f.id));
+  const participantUnlocked = mode==='admin' ? true : participantRoundUnlockedForMatch(pid, f.id);
+  let teamInputs='';
+
+  if(mode==='admin'){
+    const off=officialKnockoutTeams()[String(f.id)] || {};
+    const homeOptions = officialFixtureSidePossibleNames(f,'home');
+    const awayOptions = officialFixtureSidePossibleNames(f,'away');
+    const homeLabels = officialWinnerLoserOptionLabels(f.home);
+    const awayLabels = officialWinnerLoserOptionLabels(f.away);
+    const homeSelect = homeOptions.length ? countrySelect(`ko-home-${f.id}`, off.home || '', homeOptions, 'data-ko-round="admin"', homeLabels) : `<div class="ko-country-row">${countryFlagImg("", `flag-ko-home-${f.id}`)}<select id="ko-home-${f.id}" disabled><option>Vul eerst vorige ronde in</option></select></div>`;
+    const awaySelect = awayOptions.length ? countrySelect(`ko-away-${f.id}`, off.away || '', awayOptions, 'data-ko-round="admin"', awayLabels) : `<div class="ko-country-row">${countryFlagImg("", `flag-ko-away-${f.id}`)}<select id="ko-away-${f.id}" disabled><option>Vul eerst vorige ronde in</option></select></div>`;
+    teamInputs = `<div class="notice"><strong>Officieel finaleschema invullen:</strong><br><strong>Boven/thuis:</strong> ${esc(sourceRouteLabel(f.home))}<br><strong>Onder/uit:</strong> ${esc(sourceRouteLabel(f.away))}</div><label>Land thuis / boven (${esc(sourceRouteLabel(f.home))})</label>${homeSelect}<label>Land uit / onder (${esc(sourceRouteLabel(f.away))})</label>${awaySelect}<div class="small">Automatisch hulpmiddel: ${esc(pair[0]?.name||'Nog te bepalen')} - ${esc(pair[1]?.name||'Nog te bepalen')}</div>`;
+  }else if(!participantUnlocked){
+    teamInputs = `<div class="notice"><strong>Nog niet invulbaar.</strong><br>${esc(unlockNoticeForMatch(f.id))}</div>`;
+  }else{
+    const homeOptions = participantFixtureSidePossibleNames(f,'home',pid);
+    const awayOptions = participantFixtureSidePossibleNames(f,'away',pid);
+    const firstAttrs = isFirstRound ? 'data-ko-round="first"' : 'data-ko-round="later"';
+    const homeLabels = isFirstRound ? participantOptionLabels(pid, homeOptions) : participantWinnerLoserOptionLabels(f.home, pid);
+    const awayLabels = isFirstRound ? participantOptionLabels(pid, awayOptions) : participantWinnerLoserOptionLabels(f.away, pid);
+    const homeSelect = homeOptions.length ? countrySelect(`pred-ko-home-${f.id}`, picks.home || '', homeOptions, firstAttrs, homeLabels) : `<div class="ko-country-row">${countryFlagImg("")}<select disabled><option>Vul eerst de vorige wedstrijd in</option></select></div>`;
+    const awaySelect = awayOptions.length ? countrySelect(`pred-ko-away-${f.id}`, picks.away || '', awayOptions, firstAttrs, awayLabels) : `<div class="ko-country-row">${countryFlagImg("")}<select disabled><option>Vul eerst de vorige wedstrijd in</option></select></div>`;
+    const helper = isFirstRound ? '<br><span class="small">Deze landen komen nu rechtstreeks uit jouw eigen voorspelde poulestand. Staat Tsjechië bij jou 1e, dan verschijnt Tsjechië bij 1e Poule A.</span>' : '<br><span class="small">Bij de landen staat wie in de vorige wedstrijd wint of verliest volgens jouw voorspelling. Je kunt daarna nog zelf kiezen wie doorgaat.</span>';
+    teamInputs = `<div class="notice"><strong>Mogelijke landen volgens schema:</strong><br><strong>Boven/thuis:</strong> ${esc(sourceRouteLabel(f.home))}<br><strong>Onder/uit:</strong> ${esc(sourceRouteLabel(f.away))}${helper}</div><label>Land thuis / boven (${esc(sourceRouteLabel(f.home))})</label>${homeSelect}<label>Land uit / onder (${esc(sourceRouteLabel(f.away))})</label>${awaySelect}<div class="small">Actueel automatisch schema: ${esc(pair[0]?.name||'Nog te bepalen')} - ${esc(pair[1]?.name||'Nog te bepalen')}</div>`;
+  }
+  const disabled = participantUnlocked ? '' : 'disabled';
+  const pointsInfo = (mode!=='admin' && pid && pid!=='admin') ? participantMatchPointsHTML(pid, f.id, true) : '';
+  const otherInfo = (mode!=='admin' && pid && pid!=='admin') ? otherPredictionsHTML(f.id, true) : '';
+  return `<div class="bracket-match"><div class="small">Wedstrijd ${f.id}</div>${teamInputs}<div class="score"><input id="${prefix}-h-${f.id}" type="number" min="0" value="${values.home_goals??''}" ${disabled}><span>-</span><input id="${prefix}-a-${f.id}" type="number" min="0" value="${values.away_goals??''}" ${disabled}></div>${pointsInfo}${otherInfo}<button class="save" onclick="${saveFn}" ${disabled}>${label}</button></div>`;
+}
+function updateKnockoutSelectLocks(){
+  // Alleen in de Laatste 32 blokkeren we een land zodra het al ergens gekozen is.
+  // In latere rondes moet hetzelfde land juist opnieuw gekozen kunnen worden als winnaar.
+  const firstRoundSelects=[...document.querySelectorAll('.ko-country-select[data-ko-round="first"]')];
+  const used=firstRoundSelects.map(s=>s.value).filter(Boolean);
+  firstRoundSelects.forEach(sel=>{
+    [...sel.options].forEach(opt=>{
+      if(!opt.value) return;
+      opt.disabled = opt.value!==sel.value && used.includes(opt.value);
+    });
+  });
+}
+function renderFinalRound(name, fixtures, teams, mode, predMap){
+  const unlocked=roundIsUnlocked(name);
+  return `<div class="bracket-round ${unlocked?'':'locked'}"><h3>${name}</h3>${unlocked?'':`<div class="notice">Deze ronde gaat open zodra de vorige fase compleet is ingevuld.</div>`}${fixtures.map(f=>renderKnockoutMatch(f, teams, mode, predMap)).join('')}</div>`;
+}
+
+function progressBox(label, filled, total, extra=""){
+  filled=Math.max(0, Math.min(Number(filled)||0, Number(total)||0));
+  total=Number(total)||0;
+  const pct=total ? Math.round((filled/total)*100) : 0;
+  const remaining=Math.max(0,total-filled);
+  return `<div class="progress-box"><div class="progress-head"><span>${esc(label)}</span><span class="progress-count">${filled}/${total}</span></div><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><div class="small">${remaining===0?'Alles ingevuld ✅':`Nog ${remaining} te gaan`}${extra?` • ${esc(extra)}`:''}</div></div>`;
+}
+function stickyProgressHTML(label, filled, total){
+  filled=Math.max(0, Math.min(Number(filled)||0, Number(total)||0));
+  total=Number(total)||0;
+  const pct=total ? Math.round((filled/total)*100) : 0;
+  return `<div class="sticky-progress-inner"><span>${esc(label)}</span><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><span class="sticky-progress-count">${filled}/${total}</span></div>`;
+}
+function renderStickyProgress(tab=window.currentTab){
+  const el=document.getElementById('stickyProgress');
+  if(!el) return;
+  const pid=state.currentParticipant?.id;
+  if(!hasAccess() || !pid || pid==='admin' || !['predictions','finals','bonus'].includes(tab)){
+    el.classList.add('hidden');
+    el.innerHTML='';
+    return;
+  }
+  const data = tab==='predictions' ? predictionProgress(pid) : tab==='finals' ? finalsProgress(pid) : bonusProgress(pid);
+  const label = tab==='predictions' ? 'Poulewedstrijden' : tab==='finals' ? 'Finaleschema' : 'Bonus';
+  el.innerHTML=stickyProgressHTML(label, data.filled, data.total);
+  el.classList.remove('hidden');
+}
+function predictionProgress(pid){
+  const pred=predictionMap(pid);
+  const filled=matches.filter(m=>{
+    const p=pred[String(m.id)];
+    return p && p.home_goals!=null && p.away_goals!=null;
+  }).length;
+  return {filled,total:matches.length};
+}
+function knockoutMatchIds(){
+  return [...knockoutFirstRound.map(f=>f.id), ...knockoutNextRounds.flatMap(r=>r.fixtures.map(f=>f.id))];
+}
+function finalsProgress(pid){
+  const pred=predictionMap(pid);
+  const picks=participantKnockoutTeams(pid);
+  const ids=knockoutMatchIds();
+  const filled=ids.filter(id=>{
+    const p=pred[String(id)]||{};
+    const k=picks[String(id)]||{};
+    return !!k.home && !!k.away && p.home_goals!=null && p.away_goals!=null;
+  }).length;
+  return {filled,total:ids.length};
+}
+function bonusProgress(pid){
+  const ans=participantBonusMap(pid);
+  const filled=bonusQuestions.filter(q=>String(ans[q.id]||'').trim()!=='').length;
+  return {filled,total:bonusQuestions.length};
+}
+
+function overviewPredictionCell(pred, res, pid, matchId){
+  const filled=pred && pred.home_goals!==null && pred.away_goals!==null && pred.home_goals!==undefined && pred.away_goals!==undefined;
+  if(!filled) return `<span class="pred-cell pending-cell">-<span class="pred-points">nog leeg</span></span>`;
+
+  const scoreText=`${esc(pred.home_goals)}-${esc(pred.away_goals)}`;
+  if(!res || res.home_goals===null || res.away_goals===null || res.home_goals===undefined || res.away_goals===undefined){
+    return `<span class="pred-cell pending-cell">${scoreText}<span class="pred-points">nog geen uitslag</span></span>`;
+  }
+
+  const points=scorePrediction(pred,res) * (participantJokers(pid).includes(String(matchId)) ? 2 : 1);
+  const basePoints=scorePrediction(pred,res);
+  let cls='wrong-cell';
+  let label='0 punten';
+  if(basePoints===6){
+    cls='exact-cell';
+    label=`${points} punten`;
+  }else if(basePoints===3){
+    cls='outcome-cell';
+    label=`${points} punten`;
+  }
+
+  return `<span class="pred-cell ${cls}">${scoreText}<span class="pred-points">${label}</span></span>`;
+}
+
+function renderOverview(){
+  const el=document.getElementById("overviewBox");
+  if(!el) return;
+  if(!hasAccess()){
+    el.innerHTML=`<div class="notice">🔒 Je ziet dit overzicht pas na goedkeuring.</div>`;
+    return;
+  }
+
+  const participants=state.participants
+    .filter(p=>p.status==="approved" && !participantIsDeleted(p))
+    .sort((a,b)=>a.name.localeCompare(b.name));
+
+  if(!participants.length){
+    el.innerHTML=`<div class="notice">Nog geen goedgekeurde deelnemers.</div>`;
+    return;
+  }
+
+  const resMap=resultMap();
+  let html=`<div class="notice">Hier zie je alle voorspellingen van deelnemers. Groen = exact goed, oranje = winnaar/gelijkspel goed, rood = fout.</div>`;
+
+  // Poulewedstrijden
+  allGroups().forEach(group=>{
+    html+=`<div class="group-title">${groupOrderName(group)}</div>`;
+    html+=`<div style="overflow-x:auto"><table class="table"><thead><tr><th>Wedstrijd</th><th>Officieel</th>${participants.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>`;
+    matches.filter(m=>m.group===group).forEach(m=>{
+      const official=resMap[String(m.id)];
+      const officialFilled=official && official.home_goals!==null && official.away_goals!==null && official.home_goals!==undefined && official.away_goals!==undefined;
+      html+=`<tr>
+        <td>${teamHTML(m.home)} <span class="small">vs</span> ${teamHTML(m.away)}</td>
+        <td><strong>${officialFilled ? `${esc(official.home_goals)}-${esc(official.away_goals)}` : "-"}</strong></td>
+        ${participants.map(p=>{
+          const pred=predictionMap(p.id)[String(m.id)];
+          return `<td>${overviewPredictionCell(pred, official, p.id, m.id)}</td>`;
+        }).join("")}
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  });
+
+  // Finaleschema
+  const finalIds = knockoutMatchIds();
+  if(finalIds && finalIds.length){
+    html+=`<div class="group-title">🏆 Finaleschema</div>`;
+    html+=`<div style="overflow-x:auto"><table class="table"><thead><tr><th>Wedstrijd</th><th>Officieel</th>${participants.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>`;
+
+    finalIds.forEach(id=>{
+      const official=resMap[String(id)];
+      const officialFilled=official && official.home_goals!==null && official.away_goals!==null && official.home_goals!==undefined && official.away_goals!==undefined;
+      html+=`<tr>
+        <td>Wedstrijd ${id}</td>
+        <td><strong>${officialFilled ? `${esc(official.home_goals)}-${esc(official.away_goals)}` : "-"}</strong></td>
+        ${participants.map(p=>{
+          const pred=predictionMap(p.id)[String(id)];
+          const picks = participantKnockoutTeams(p.id)[String(id)] || {};
+          const teams = [picks.home, picks.away].filter(Boolean).join(' vs ');
+          return `<td>
+            ${overviewPredictionCell(pred, official, p.id, id)}
+            ${teams ? `<div class="small" style="margin-top:4px">${esc(teams)}</div>` : ``}
+          </td>`;
+        }).join("")}
+      </tr>`;
+    });
+
+    html+=`</tbody></table></div>`;
+  }
+
+  // Bonusvragen
+  html+=`<div class="group-title">⭐ Bonusvragen</div>`;
+  html+=`<div style="overflow-x:auto"><table class="table"><thead><tr><th>Vraag</th>${participants.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>`;
+
+  bonusQuestions.forEach(q=>{
+    html+=`<tr>
+      <td>${esc(q.question)}</td>
+      ${participants.map(p=>{
+        const answer = participantBonusMap(p.id)[q.id] || '-';
+        return `<td>${esc(answer)}</td>`;
+      }).join("")}
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div>`;
+
+  el.innerHTML=html;
+}
+
+function renderFinals(){
+  if(!hasAccess()){document.getElementById("finalsBox").innerHTML=`<div class="notice">🔒 Je ziet het finaleschema pas na goedkeuring en betaling.</div>`;return;}
+  const teams=getKnockoutTeams();
+  // Finaleschema is altijd de gok/voorspelling van de deelnemer.
+  // Officiële finales vul je alleen in via Beheer, zodat dit nooit door elkaar loopt.
+  const mode = 'participant';
+  const predMap = state.currentParticipant && state.currentParticipant.id!=='admin' ? predictionMap(state.currentParticipant.id) : {};
+  const fp = state.currentParticipant && state.currentParticipant.id!=='admin' ? finalsProgress(state.currentParticipant.id) : {filled:0,total:knockoutMatchIds().length};
+  let html=progressBox('Voortgang finaleschema', fp.filled, fp.total, 'landen + uitslag per wedstrijd') + `<div class="notice">Finales mogen alvast ingevuld worden. Punten worden pas zichtbaar in de stand zodra de beheerder de benodigde poules/ronde helemaal heeft ingevuld.</div>`;
+  html+=`<div class="bracket-grid">`;
+  html+=renderFinalRound('Laatste 32', knockoutFirstRound, teams, mode, predMap);
+  knockoutNextRounds.forEach(round=>{html+=renderFinalRound(round.name, round.fixtures, teams, mode, predMap);});
+  html+=`</div>`;
+  document.getElementById("finalsBox").innerHTML=html;
+  setTimeout(updateKnockoutSelectLocks,0);
+}
+async function saveKnockoutResult(id,btn){
+  // Belangrijk: dezelfde finales worden zowel in tab "Finaleschema" als in "Beheer" gerenderd.
+  // Daarom lezen we de waarden uit het wedstrijdblok van de knop zelf en niet via document.getElementById().
+  // Zo springt de beheer-invoer niet meer terug naar een verborgen dubbele invoer.
+  const box = btn.closest('.bracket-match') || document;
+  const h = box.querySelector(`#ko-h-${id}`)?.value ?? "";
+  const a = box.querySelector(`#ko-a-${id}`)?.value ?? "";
+  const homeTeam = box.querySelector(`#ko-home-${id}`)?.value || '';
+  const awayTeam = box.querySelector(`#ko-away-${id}`)?.value || '';
+
+  if((homeTeam && awayTeam) && homeTeam===awayTeam) return alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
+
+  const row={match_id:String(id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};
+  const {error}=await db.from("official_results").upsert(row,{onConflict:"match_id"});
+  if(error)return alert(error.message);
+
+  const bonusRows=[
+    {question_id:`official_ko_${id}_home`,answer:homeTeam},
+    {question_id:`official_ko_${id}_away`,answer:awayTeam}
+  ];
+  const b=await db.from("official_bonus_answers").upsert(bonusRows,{onConflict:"question_id"});
+  if(b.error)return alert(b.error.message);
+
+  const i=state.results.findIndex(r=>String(r.match_id)===String(id));
+  if(i>=0) state.results[i]={...state.results[i],...row}; else state.results.push(row);
+  bonusRows.forEach(br=>{
+    const j=state.officialBonus.findIndex(x=>x.question_id===br.question_id);
+    if(j>=0) state.officialBonus[j]={...state.officialBonus[j],...br}; else state.officialBonus.push(br);
+  });
+
+  // Laad alles opnieuw uit Supabase zodat de stand altijd met de nieuwste officiële landen/uitslagen rekent.
+  await loadAll();
+  showTab('admin');
+  showToast("✅ Juiste uitslag opgeslagen — stand bijgewerkt");
+}
+
+async function autoSaveAdminKnockoutTeamsFromSelect(select){
+  const m=String(select.id||'').match(/^ko-(home|away)-(\d+)$/);
+  if(!m || !state.adminUnlocked) return;
+  const id=m[2];
+  clearTimeout(window[`adminKoSaveTimer_${id}`]);
+  window[`adminKoSaveTimer_${id}`]=setTimeout(async()=>{
+    const homeTeam=document.getElementById(`ko-home-${id}`)?.value || '';
+    const awayTeam=document.getElementById(`ko-away-${id}`)?.value || '';
+    if(homeTeam && awayTeam && homeTeam===awayTeam){
+      alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
+      return;
+    }
+    const rows=[
+      {question_id:`official_ko_${id}_home`,answer:homeTeam},
+      {question_id:`official_ko_${id}_away`,answer:awayTeam}
+    ];
+    const {error}=await db.from('official_bonus_answers').upsert(rows,{onConflict:'question_id'});
+    if(error){ alert(error.message); return; }
+
+    rows.forEach(row=>{
+      const j=state.officialBonus.findIndex(x=>x.question_id===row.question_id);
+      if(j>=0) state.officialBonus[j]={...state.officialBonus[j],...row}; else state.officialBonus.push(row);
+    });
+
+    renderStandings();
+    renderPredictions();
+    renderFinals();
+    renderAdmin();
+    showTab('admin');
+    showToast('✅ Landen opgeslagen — stand bijgewerkt');
+  },250);
+}
+async function saveKnockoutPrediction(id,btn){
+  const pid=state.currentParticipant?.id;
+  if(!pid||pid==='admin') return alert('Log eerst in als deelnemer.');
+  if(!participantRoundUnlockedForMatch(pid,id)) return alert(unlockNoticeForMatch(id));
+  const box = btn.closest('.bracket-match') || document;
+  const h=box.querySelector(`#pred-ko-h-${id}`)?.value ?? "";
+  const a=box.querySelector(`#pred-ko-a-${id}`)?.value ?? "";
+  const homeTeam=box.querySelector(`#pred-ko-home-${id}`)?.value || '';
+  const awayTeam=box.querySelector(`#pred-ko-away-${id}`)?.value || '';
+  if(!homeTeam || !awayTeam) return alert('Kies eerst beide landen voor deze wedstrijd.');
+  if(homeTeam===awayTeam) return alert('Je kunt hetzelfde land niet tegen zichzelf laten spelen.');
+  if((h==="" || Number.isNaN(Number(h))) || (a==="" || Number.isNaN(Number(a)))) return alert("Vul eerst beide scores in voor deze finalewedstrijd.");
+  const row={participant_id:pid,match_id:String(id),home_goals:parseInt(h,10),away_goals:parseInt(a,10)};
+  let savedPredictionData=[];
+  try{
+    savedPredictionData=await replaceParticipantRowsInSupabase("predictions", pid, "match_id", [row]);
+  }catch(e){
+    return alert("Finalevoorspelling niet opgeslagen in Supabase: " + e.message);
+  }
+  const bonusRows=[
+    {participant_id:pid,question_id:`ko_${id}_home`,answer:homeTeam},
+    {participant_id:pid,question_id:`ko_${id}_away`,answer:awayTeam}
+  ];
+  let bonusData=[];
+  try{
+    bonusData=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", bonusRows);
+  }catch(e){
+    return alert("Finalelanden niet opgeslagen in Supabase: " + e.message);
+  }
+  clearOldLocalParticipantCache(pid);
+  state.predictions=replaceRowsByKey(state.predictions, savedPredictionData, p=>`${p.participant_id}_${p.match_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, bonusData, x=>`${x.participant_id}_${x.question_id}`);
+  renderStandings();
+  renderOverview();
+  renderFinals();
+  renderStickyProgress("finals");
+  const newBtn=document.querySelector(`#finalsBox button[onclick="saveKnockoutPrediction(${id}, this)"]`);
+  markSaved(newBtn||btn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
+}
+
+
+function groupOrderName(group){return group.replace("Groep", "Poule");}
+function allGroups(){return [...new Set(matches.map(m=>m.group))].sort((a,b)=>a.localeCompare(b, "nl", {numeric:true}));}
+
+function renderPredictions(){
+  if(!hasAccess()){document.getElementById("predictionBox").innerHTML=`<div class="notice">🔒 Je kunt voorspellingen pas invullen na goedkeuring en betaling.</div>`;return;}
+  if(!state.settings.predictions_open && !state.adminUnlocked){document.getElementById("predictionBox").innerHTML=`<div class="notice">Voorspellingen invullen staat nog dicht.</div>`;return;}
+  const cur=state.currentParticipant;
+  if(!cur||cur.id==="admin"){document.getElementById("predictionBox").innerHTML=`<div class="notice">Log eerst in als deelnemer.</div>`;return;}
+  const pred=predictionMap(cur.id);
+  const pp=predictionProgress(cur.id);
+  let html=progressBox('Voortgang poulewedstrijden', pp.filled, pp.total, 'uitslag per wedstrijd') + `<div class="notice">Je vult voorspellingen in als <strong>${esc(cur.name)}</strong>.</div>`;
+  allGroups().forEach(group=>{
+    html+=`<div class="group-title">${groupOrderName(group)}</div>${renderGroupStandings(group, getPredictionGroupStandings(group, cur.id))}`;
+    matches.filter(m=>m.group===group).forEach(m=>{
+      const p=pred[String(m.id)]||{};
+      const isJoker=participantJokers(cur.id).includes(String(m.id));
+      html+=`<div class="match"><div class="small">${m.date} • ${m.time}</div><div class="teams">${teamHTML(m.home)}<span>vs</span>${teamHTML(m.away)}</div><div class="score"><input id="pred-h-${m.id}" type="number" min="0" value="${p.home_goals??''}"><span>-</span><input id="pred-a-${m.id}" type="number" min="0" value="${p.away_goals??''}"></div>${participantMatchPointsHTML(cur.id, m.id, false)}${otherPredictionsHTML(m.id, false)}<div class="joker-row"><input class="joker-hidden" id="joker-${m.id}" type="checkbox" ${isJoker?'checked':''}><button type="button" id="joker-btn-${m.id}" class="joker-btn ${isJoker?'active':''}" onclick="toggleJoker('${m.id}')">⚡ ${isJoker?'Joker actief':'Joker'}</button><span class="joker-help">Maximaal 3 jokers, dubbele punten op deze poulewedstrijd.</span></div></div>`;
+    });
+    html += groupButton(group);
+  });
+  document.getElementById("predictionBox").innerHTML=html;
+  refreshJokerButtons();
+}
+function groupButton(group){return `<div class="group-actions"><button class="save" onclick="savePredictionGroup('${group}', this)">Poule opslaan</button></div>`;}
+function loginWithPassword(){
+  const id=document.getElementById("loginPlayer").value;
+  const password=document.getElementById("loginPassword").value.trim();
+  const p=state.participants.find(x=>x.id===id);
+  if(!p) return alert("Kies eerst je naam.");
+  if((p.password||"") !== password) return alert("Onjuist wachtwoord.");
+  state.currentParticipant=p;
+  localStorage.setItem("wk_current_participant", JSON.stringify(p));
+  renderAll();
+  showTab("standings");
+}
+function selectPlayer(id){const p=state.participants.find(x=>x.id===id); state.currentParticipant=p||null; localStorage.setItem("wk_current_participant", JSON.stringify(state.currentParticipant)); if(p) clearOldLocalParticipantCache(p.id); renderAll(); if(hasAccess()) showTab("standings");}
+function jokerInputs(){return [...document.querySelectorAll('.joker-hidden')];}
+function refreshJokerButtons(){
+  const inputs=jokerInputs();
+  const used=inputs.filter(x=>x.checked).length;
+  const remaining=Math.max(0,3-used);
+  inputs.forEach(input=>{
+    const id=input.id.replace('joker-','');
+    const btn=document.getElementById(`joker-btn-${id}`);
+    if(!btn) return;
+    btn.classList.toggle('active', input.checked);
+    btn.disabled = !input.checked && remaining<=0;
+    btn.innerHTML = input.checked ? '⚡ Joker actief' : `⚡ Joker <span class="joker-count">(${remaining})</span>`;
+  });
+}
+function toggleJoker(matchId){
+  const input=document.getElementById(`joker-${matchId}`);
+  if(!input) return;
+  const used=jokerInputs().filter(x=>x.checked).length;
+  if(!input.checked && used>=3){
+    showToast('⚡ Je hebt al 3 jokers ingezet');
+    return;
+  }
+  input.checked=!input.checked;
+  refreshJokerButtons();
+  showToast(input.checked ? '🃏 Joker ingezet! Dubbele punten' : '⚡ Joker verwijderd');
+}
+function limitJokers(changed){
+  const checked=jokerInputs().filter(x=>x.checked);
+  if(checked.length>3){ changed.checked=false; showToast('⚡ Je mag maximaal 3 jokers inzetten'); }
+  refreshJokerButtons();
+}
+async function savePredictionGroup(group,btn){
+  const pid=state.currentParticipant?.id; if(!pid||pid==="admin")return alert("Kies eerst je naam.");
+  const rows=matches.filter(m=>m.group===group).map(m=>{
+    const h=document.getElementById(`pred-h-${m.id}`).value;
+    const a=document.getElementById(`pred-a-${m.id}`).value;
+    const hasHome=h!=="" && !Number.isNaN(Number(h));
+    const hasAway=a!=="" && !Number.isNaN(Number(a));
+    if(!hasHome && !hasAway) return null; // oude lege records niet opnieuw opslaan
+    if(hasHome !== hasAway) return {error:true, match:m};
+    return {participant_id:pid,match_id:String(m.id),home_goals:parseInt(h,10),away_goals:parseInt(a,10)};
+  });
+  const invalid=rows.find(r=>r && r.error);
+  if(invalid) return alert(`Vul bij ${invalid.match.home.name} - ${invalid.match.away.name} beide scores in, of laat beide velden leeg.`);
+  const rowsToSave=rows.filter(Boolean);
+  if(!rowsToSave.length) return alert("Vul minimaal één complete uitslag in voordat je opslaat.");
+
+  // v47: niet alleen lokaal bewaren, maar controleren of Supabase de opgeslagen voorspellingen ook echt teruggeeft.
+  // Als dit faalt, ziet de deelnemer op dezelfde telefoon soms wel 72/72 door localStorage,
+  // maar ziet de beheerder/de totaalpagina de voorspellingen niet.
+  let data=[];
+  try{
+    data=await replaceParticipantRowsInSupabase("predictions", pid, "match_id", rowsToSave);
+  }catch(e){
+    return alert("Voorspellingen niet opgeslagen in Supabase: " + e.message);
+  }
+
+  const allJokerInputs=[...document.querySelectorAll('[id^="joker-"]')];
+  const checkedAll=allJokerInputs.filter(x=>x.checked);
+  if(checkedAll.length>3){ showToast('⚡ Je mag maximaal 3 jokers inzetten'); return; }
+  const jokerRows=matches.map(m=>({participant_id:pid,question_id:`joker_${m.id}`,answer:document.getElementById(`joker-${m.id}`)?.checked?'true':'false'}));
+  let jokerData=[];
+  try{
+    jokerData=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", jokerRows);
+  }catch(e){
+    return alert("Jokers niet opgeslagen in Supabase: " + e.message);
+  }
+
+  clearOldLocalParticipantCache(pid);
+  state.predictions=replaceRowsByKey(state.predictions, data, p=>`${p.participant_id}_${p.match_id}`);
+  state.bonus=replaceRowsByKey(state.bonus, jokerData, x=>`${x.participant_id}_${x.question_id}`);
+
+  // Belangrijk: niet de invulpagina opnieuw tekenen na opslaan.
+  // Daardoor blijven de zojuist ingevulde velden zichtbaar op telefoon/desktop.
+  // We werken wel direct de state, stand, voortgang en totaaloverzicht bij met Supabase-data.
+  renderStandings();
+  renderOverview();
+  renderStickyProgress("predictions");
+  if(window.currentTab==='finals') renderFinals();
+
+  const newBtn=[...document.querySelectorAll('#predictionBox button.save')].find(b=>b.getAttribute('onclick')===`savePredictionGroup('${group}', this)`) || btn;
+  markSaved(newBtn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
+}
+function renderBonus(){
+  if(!hasAccess()){document.getElementById("bonusBox").innerHTML=`<div class="notice">🔒 Je kunt bonusvragen pas invullen na goedkeuring en betaling.</div>`;return;}
+  const cur=state.currentParticipant;
+  if(!cur||cur.id==="admin"){document.getElementById("bonusBox").innerHTML=`<div class="notice">Kies eerst je naam bij Invullen.</div>`;return;}
+  const ans=participantBonusMap(cur.id);
+  const bp=bonusProgress(cur.id);
+  document.getElementById("bonusBox").innerHTML=
+    progressBox('Voortgang bonusvragen', bp.filled, bp.total, 'antwoord per vraag') +
+    `<div class="notice">Vul je antwoorden in en klik onderaan op <strong>Alle bonusvragen opslaan</strong>. Los per vraag opslaan kan ook.</div>` +
+    bonusQuestions.map(q=>{
+      const v=ans[q.id]||"";
+      const field=q.type==="text"
+        ? `<input id="bonus-${q.id}" value="${esc(v)}" placeholder="Vul spelernaam in...">`
+        : `<select id="bonus-${q.id}">${q.options?optionList(q.options,v):countryOptions(v)}</select>`;
+      return `<div class="match"><strong>${q.question}</strong><div class="small">10 punten</div>${field}<button class="save" onclick="saveBonus('${q.id}', this)">Deze vraag opslaan</button></div>`;
+    }).join("") +
+    `<div class="group-actions"><button class="save" onclick="saveAllBonus(this)">Alle bonusvragen opslaan</button></div>`;
+}
+function collectBonusRows(pid, onlyQid=null){
+  const questions = onlyQid ? bonusQuestions.filter(q=>q.id===onlyQid) : bonusQuestions;
+  return questions.map(q=>{
+    const input=document.getElementById(`bonus-${q.id}`);
+    const answer=input ? String(input.value || "").trim() : "";
+    if(!answer) return null; // lege oude antwoorden niet opnieuw opslaan
+    return {participant_id:pid,question_id:q.id,answer};
+  }).filter(Boolean);
+}
+function updateLocalBonusState(pid, rows){
+  clearOldLocalParticipantCache(pid);
+  state.bonus=replaceRowsByKey(state.bonus, rows, x=>`${x.participant_id}_${x.question_id}`);
+}
+async function saveBonus(qid,btn){
+  const pid=state.currentParticipant?.id;
+  if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
+  const rows=collectBonusRows(pid, qid);
+  if(!rows.length) return alert("Vul eerst een antwoord in voordat je opslaat.");
+
+  let data=[];
+  try{
+    data=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", rows);
+  }catch(e){
+    return alert("Bonusvraag niet opgeslagen in Supabase: " + e.message);
+  }
+
+  updateLocalBonusState(pid, data);
+
+  renderStickyProgress("bonus");
+  renderStandings();
+  renderOverview();
+  markSaved(btn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
+}
+async function saveAllBonus(btn){
+  const pid=state.currentParticipant?.id;
+  if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
+  const rows=collectBonusRows(pid);
+  if(!rows.length) return alert("Vul minimaal één bonusvraag in voordat je opslaat.");
+
+  let data=[];
+  try{
+    data=await replaceParticipantRowsInSupabase("bonus_answers", pid, "question_id", rows);
+  }catch(e){
+    return alert("Bonusvragen niet opgeslagen in Supabase: " + e.message);
+  }
+
+  updateLocalBonusState(pid, data);
+
+  renderBonus();
+  renderStickyProgress("bonus");
+  renderStandings();
+  renderOverview();
+  const newBtn=document.querySelector('#bonusBox .group-actions button.save') || btn;
+  markSaved(newBtn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
+}
+function renderChat(){
+  if(!hasAccess()){document.getElementById("chatBox").innerHTML=`<div class="notice">🔒 Je kunt berichten pas lezen en plaatsen na goedkeuring en betaling.</div>`;return;}
+  const cur=state.currentParticipant;
+  document.getElementById("chatBox").innerHTML = `${cur&&cur.id!=="admin"?`<div class="notice">Je plaatst berichten als <strong>${esc(cur.name)}</strong>.</div><textarea id="msgText" placeholder="Schrijf een bericht..."></textarea><button class="save" onclick="sendMessage(this)">Plaats bericht</button>`:`<div class="notice">Log in als deelnemer om berichten te plaatsen.</div>`}
+  <h3>Berichten</h3>${state.messages.map(m=>`<div class="msg"><strong>${esc(m.name)}</strong><time>${new Date(m.created_at).toLocaleString("nl-NL")}</time><p>${esc(m.message)}</p></div>`).join("") || "<p>Nog geen berichten.</p>"}`;
+}
+async function sendMessage(btn){const cur=state.currentParticipant;const message=document.getElementById("msgText").value.trim();if(!cur||cur.id==="admin"||!message)return; const {error}=await db.from("messages").insert({participant_id:cur.id,name:cur.name,message}); if(error)return alert(error.message); markSaved(btn,"Geplaatst"); showToast("✅ Bericht geplaatst"); await loadAll();}
+function renderAdmin(){
+  document.getElementById("adminLogin").innerHTML = state.adminUnlocked ? "" : `<label>Beheercode</label><input id="adminCode" type="password" placeholder="Beheercode"><button class="save" onclick="unlockAdmin(this)">Open beheer</button>`;
+  if(!state.adminUnlocked) return;
+  const settings=`<div class="card"><h3>Instellingen</h3><label>Inschrijven</label><select onchange="saveSetting('registration_open', this.value==='true')"><option value="true" ${state.settings.registration_open?"selected":""}>Open</option><option value="false" ${!state.settings.registration_open?"selected":""}>Dicht</option></select><label>Voorspellingen invullen</label><select onchange="saveSetting('predictions_open', this.value==='true')"><option value="true" ${state.settings.predictions_open?"selected":""}>Open</option><option value="false" ${!state.settings.predictions_open?"selected":""}>Dicht</option></select></div>`;
+  const participants=`<div class="card"><h3>Deelnemers beheren</h3><p class="small">Hier kun je namen en wachtwoorden aanpassen als iemand iets gewijzigd wil hebben.</p><table class="table"><thead><tr><th>Naam</th><th>Email</th><th>Wachtwoord</th><th>Status</th><th>Betaald</th><th>Actie</th><th>Verwijderen</th></tr></thead><tbody>${state.participants.filter(p=>!participantIsDeleted(p)).map(p=>`<tr><td><input id="name-${p.id}" value="${esc(p.name||"")}" style="min-width:130px"><button class="save secondary" onclick="setParticipantName('${p.id}', this)">Naam opslaan</button></td><td>${esc(p.email)}</td><td><input id="pw-${p.id}" value="${esc(p.password||"")}" style="min-width:110px"><button class="save secondary" onclick="setPassword('${p.id}')">Opslaan</button></td><td><span class="status-pill ${p.status}">${p.status}</span></td><td><input type="checkbox" ${p.paid?"checked":""} onchange="setPaid('${p.id}', this.checked)"></td><td><button class="save" onclick="setStatus('${p.id}','approved')">Goedkeuren</button> <button class="save danger" onclick="setStatus('${p.id}','rejected')">Afkeuren</button></td><td><button class="save danger" onclick="deleteParticipant('${p.id}')">Verwijder</button></td></tr>`).join("") || `<tr><td colspan="7">Nog geen deelnemers.</td></tr>`}</tbody></table></div>`;
+  const results=`<div class="card"><h3>Officiële uitslagen / nakijken</h3><p class="small">Vul hier de juiste uitslagen in. Punten worden pas vrijgegeven zodra de hele poule of vorige knock-outronde compleet is. Winnaar goed = 3 punten, exacte score = 6 punten.</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="save danger" onclick="resetOfficialResults(this)">Alles resetten naar 0-0</button><button class="save secondary" onclick="saveEmptyOfficialState(this)">Reset opslaan</button></div>${renderOfficialResults()}<div class="group-title">Finales invullen bij beheer</div>${renderAdminFinalsResults()}</div>`;
+  const bonus=`<div class="card"><h3>Juiste bonusantwoorden</h3>${renderOfficialBonus()}</div>`;
+  document.getElementById("adminPanel").classList.remove("hidden");
+  document.getElementById("adminPanel").innerHTML=settings+participants+results+bonus;
+}
+function unlockAdmin(btn){if(document.getElementById("adminCode").value!==ADMIN_CODE)return alert("Onjuiste beheercode"); state.adminUnlocked=true; localStorage.setItem("wk_admin_unlocked","true"); btn.classList.add("saved"); renderAll(); showTab("admin");}
+async function saveSetting(key,value){await db.from("app_settings").upsert({key,value},{onConflict:"key"}); await loadAll(); showTab("admin");}
+async function setParticipantName(id,btn){
+  const name=document.getElementById(`name-${id}`)?.value.trim();
+  if(!name) return alert('Vul een naam in.');
+  const {error}=await db.from("participants").update({name}).eq("id",id);
+  if(error) return alert(error.message);
+  const p=state.participants.find(x=>x.id===id);
+  if(p) p.name=name;
+  if(state.currentParticipant && state.currentParticipant.id===id){
+    state.currentParticipant={...state.currentParticipant,name};
+    localStorage.setItem("wk_current_participant", JSON.stringify(state.currentParticipant));
+  }
+  markSaved(btn,'Naam opgeslagen');
+  showToast('✅ Naam opgeslagen');
+  await loadAll();
+  showTab("admin");
+}
+async function setPaid(id,paid){await db.from("participants").update({paid}).eq("id",id); await loadAll(); showTab("admin");}
+async function setStatus(id,status){await db.from("participants").update({status}).eq("id",id); await loadAll(); showTab("admin");}
+async function deleteParticipant(id){
+  const p=state.participants.find(x=>x.id===id);
+  if(!p) return;
+  if(!confirm(`Weet je zeker dat je ${p.name} helemaal wilt verwijderen? Alles van dit account verdwijnt: voorspellingen, finaleschema, bonusantwoorden, berichten en het account zelf.`)) return;
+
+  // Direct lokaal uit beeld halen, zodat beheer en deelnemers hem meteen niet meer zien.
+  const deletedIds = JSON.parse(localStorage.getItem('wk_deleted_participants') || '[]');
+  if(!deletedIds.includes(id)){
+    deletedIds.push(id);
+    localStorage.setItem('wk_deleted_participants', JSON.stringify(deletedIds));
+  }
+
+  state.settings.deleted_participants = [...new Set([...(state.settings.deleted_participants||[]), id])];
+  state.participants = state.participants.filter(x=>x.id!==id);
+  state.predictions = state.predictions.filter(x=>x.participant_id!==id);
+  state.bonus = state.bonus.filter(x=>x.participant_id!==id);
+  state.messages = state.messages.filter(x=>x.participant_id!==id);
+
+  if(state.currentParticipant && state.currentParticipant.id===id){
+    state.currentParticipant=null;
+    localStorage.removeItem("wk_current_participant");
+  }
+
+  renderAll();
+  showTab("admin");
+
+  // Eerst gekoppelde data verwijderen, daarna pas het account zelf.
+  // Zo blijft er niets zichtbaar in stand, chat, voorspellingen, bonus of beheer.
+  const errors=[];
+
+  try{
+    const allDeleted = [...new Set([...deletedParticipantsAll(), id])];
+    const saved = await saveDeletedParticipantsGlobal(allDeleted);
+    if(saved?.error) errors.push(saved.error.message || 'Globale verwijderlijst kon niet worden opgeslagen.');
+  }catch(e){
+    errors.push(e.message || String(e));
+  }
+
+  for(const action of [
+    () => db.from("predictions").delete().eq("participant_id",id),
+    () => db.from("bonus_answers").delete().eq("participant_id",id),
+    () => db.from("messages").delete().eq("participant_id",id),
+    () => db.from("participants").delete().eq("id",id)
+  ]){
+    try{
+      const res = await action();
+      if(res?.error) errors.push(res.error.message);
+    }catch(e){
+      errors.push(e.message || String(e));
+    }
+  }
+
+  await loadAll();
+  showTab("admin");
+
+  if(errors.length){
+    alert(`${p.name} is lokaal uit beeld gehaald. Supabase gaf nog een melding bij definitief verwijderen: ${[...new Set(errors)].join(' | ')}`);
+  }else{
+    alert(`${p.name} is helemaal verwijderd.`);
+  }
+}
+async function setPassword(id){
+  const password=document.getElementById(`pw-${id}`).value.trim();
+  if(password.length < 4) return alert("Wachtwoord moet minimaal 4 tekens zijn.");
+  await db.from("participants").update({password}).eq("id",id);
+  await loadAll();
+  showTab("admin");
+}
+function allOfficialMatchIds(){
+  return [...matches.map(m=>String(m.id)), ...knockoutFirstRound.map(f=>String(f.id)), ...knockoutNextRounds.flatMap(r=>r.fixtures.map(f=>String(f.id)))];
+}
+async function resetOfficialResults(btn){
+  if(!confirm('Weet je zeker dat je alles wilt resetten? Officiële poule-uitslagen, finales en bonusantwoorden worden leeggemaakt.')) return;
+  await clearOfficialStateInDatabase();
+  markSaved(btn, 'Gereset');
+  showToast('✅ Alles staat klaar op 0-0');
+  renderAll();
+  showTab('admin');
+}
+async function saveEmptyOfficialState(btn){
+  await clearOfficialStateInDatabase();
+  markSaved(btn, 'Reset opgeslagen');
+  showToast('✅ Reset opgeslagen');
+  renderAll();
+  showTab('admin');
+}
+async function clearOfficialStateInDatabase(){
+  const ids=allOfficialMatchIds();
+  // Sla lege officiële uitslagen expliciet op. Daardoor komen oude scores niet terug na wisselen van tabblad of herladen.
+  const emptyRows=ids.map(id=>({match_id:String(id),home_goals:null,away_goals:null}));
+  const up=await db.from('official_results').upsert(emptyRows,{onConflict:'match_id'});
+  if(up.error) return alert(up.error.message);
+
+  const officialKoQuestionIds=ids.flatMap(id=>[`official_ko_${id}_home`,`official_ko_${id}_away`]);
+  const regularBonusIds=bonusQuestions.map(q=>q.id);
+  await db.from('official_bonus_answers').delete().in('question_id',[...officialKoQuestionIds,...regularBonusIds]);
+
+  state.results=emptyRows;
+  state.officialBonus=state.officialBonus.filter(x=>![...officialKoQuestionIds,...regularBonusIds].includes(x.question_id));
+}
+function renderAdminFinalsResults(){
+  const teams=getKnockoutTeams();
+  let html='<div class="notice">Vul hier de officiële finalewedstrijden in. Per wedstrijd kies je de officiële landen; die landpunten tellen direct. De uitslagpunten komen erbij zodra je de echte uitslag invult.<br><br><strong>Puntencontrole knock-out:</strong> Knock-out uitslag exact = 9 punten, winnaar/gelijkspel = 3 punten. Laatste 32/Achtste: land verkeerde plek 2, juiste plek 4, alles exact extra 9. Kwart: 4/6/13. Halve: 6/8/17. Finale: 10/10/25.</div>';
+  html+=renderFinalRound('Laatste 32', knockoutFirstRound, teams, 'admin', {});
+  knockoutNextRounds.forEach(round=>{ html+=renderFinalRound(round.name, round.fixtures, teams, 'admin', {}); });
+  return html;
+}
+function renderOfficialResults(){
+  const res=resultMap(); let html="";
+  allGroups().forEach(group=>{
+    html+=`<div class="group-title">${groupOrderName(group)}</div>${renderGroupStandings(group)}`;
+    matches.filter(m=>m.group===group).forEach(m=>{
+      const r=res[String(m.id)]||{};
+      html+=`<div class="match"><div class="small">${m.date} • ${m.time}</div><div class="teams">${teamHTML(m.home)}<span>vs</span>${teamHTML(m.away)}</div><div class="score"><input id="res-h-${m.id}" type="number" min="0" value="${r.home_goals??''}"><span>-</span><input id="res-a-${m.id}" type="number" min="0" value="${r.away_goals??''}"></div></div>`;
+    });
+    html+=`<button class="save" onclick="saveOfficialGroup('${group}', this)">Uitslagen ${groupOrderName(group)} opslaan</button>`;
+  });
+  return html;
+}
+async function saveOfficialGroup(group,btn){
+  const rows=matches.filter(m=>m.group===group).map(m=>{
+    const h=document.getElementById(`res-h-${m.id}`).value;
+    const a=document.getElementById(`res-a-${m.id}`).value;
+    return {match_id:String(m.id),home_goals:h===""?null:parseInt(h,10),away_goals:a===""?null:parseInt(a,10)};
+  });
+  const {error}=await db.from("official_results").upsert(rows,{onConflict:"match_id"});
+  if(error)return alert(error.message);
+  rows.forEach(row=>{
+    const i=state.results.findIndex(r=>String(r.match_id)===String(row.match_id));
+    if(i>=0) state.results[i]={...state.results[i],...row}; else state.results.push(row);
+  });
+  renderStandings();
+  renderPredictions();
+  renderOverview();
+  renderFinals();
+  renderAdmin();
+  renderStickyProgress(window.currentTab || "admin");
+  const newBtn=[...document.querySelectorAll('#adminPanel button.save')].find(b=>b.textContent.includes(`Uitslagen ${groupOrderName(group)} opslaan`)) || btn;
+  markSaved(newBtn,"Opgeslagen");
+  showToast("✅ Opgeslagen");
+}
+function renderOfficialBonus(){const off=officialBonusMap(); return bonusQuestions.map(q=>{const v=off[q.id]||""; const field=q.type==="text"?`<input id="off-bonus-${q.id}" value="${esc(v)}">`:`<select id="off-bonus-${q.id}">${q.options?optionList(q.options,v):countryOptions(v)}</select>`;return `<div class="match"><strong>${q.question}</strong>${field}</div>`;}).join("")+`<button class="save" onclick="saveOfficialBonus(this)">Bonusantwoorden opslaan</button>`;}
+async function saveOfficialBonus(btn){const rows=bonusQuestions.map(q=>({question_id:q.id,answer:document.getElementById(`off-bonus-${q.id}`).value})); const {error}=await db.from("official_bonus_answers").upsert(rows,{onConflict:"question_id"}); if(error)return alert(error.message); markSaved(btn,"Opgeslagen"); showToast("✅ Opgeslagen"); await loadAll(); showTab("admin");}
+function renderRules(){
+  if(!hasAccess()){document.getElementById("rulesBox").innerHTML=`<div class="notice">🔒 Je ziet de puntenregeling pas na goedkeuring en betaling.</div>`; return;}
+  document.getElementById("rulesBox").innerHTML=`<div class="card"><h3>Poulewedstrijden</h3><table class="table"><tbody><tr><td>Exacte uitslag goed</td><td><strong>6 punten</strong></td></tr><tr><td>Winnaar/gelijkspel goed</td><td><strong>3 punten</strong></td></tr><tr><td>Joker ingezet op poulewedstrijd</td><td><strong>Punten x2</strong></td></tr></tbody></table><p class="small">Poulepunten tellen direct per wedstrijd zodra de beheerder die officiële uitslag invult.</p></div><div class="card"><h3>Knock-out wedstrijden</h3><table class="table"><thead><tr><th>Ronde</th><th>Uitslag exact</th><th>Winnaar/gelijkspel</th><th>Land door verkeerde plek</th><th>Land juiste plek</th><th>Alles exact extra</th></tr></thead><tbody><tr><td>Laatste 32 / Achtste finale</td><td>9 pnt</td><td>3 pnt</td><td>2 pnt per land</td><td>4 pnt per land</td><td>9 pnt extra</td></tr><tr><td>Kwartfinale</td><td>9 pnt</td><td>3 pnt</td><td>4 pnt per land</td><td>6 pnt per land</td><td>13 pnt extra</td></tr><tr><td>Halve finale</td><td>9 pnt</td><td>3 pnt</td><td>6 pnt per land</td><td>8 pnt per land</td><td>17 pnt extra</td></tr><tr><td>Finale</td><td>9 pnt</td><td>3 pnt</td><td>10 pnt per land</td><td>10 pnt per land</td><td>25 pnt extra</td></tr></tbody></table><p class="small">Beheer is leidend: landpunten tellen direct zodra de beheerder de landen invult. Uitslagpunten komen erbij zodra de beheerder de officiële uitslag invult. Haal je als beheerder iets weg, dan verdwijnen die punten ook weer.</p></div><div class="card"><h3>Bonusvragen</h3><p>Per goede bonusvraag: <strong>10 punten</strong></p></div>`;
+}
+function logout(){localStorage.removeItem("wk_current_participant");localStorage.removeItem("wk_admin_unlocked");state.currentParticipant=null;state.adminUnlocked=false;renderAll();showTab("signup");}
+function renderAll(){updateNavigation();renderAccessBox();renderStandings();renderSignup();renderPredictions();renderOverview();renderFinals();renderBonus();renderChat();renderAdmin();renderRules();renderStickyProgress(window.currentTab);}
+loadAll();
+</script>
+</body>
+</html>
