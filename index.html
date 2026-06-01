@@ -1,7 +1,7 @@
-<!-- v58 update:
-- Opslaan van oude accounts gebruikt weer echte upsert in plaats van delete+insert.
-- Bestaande bonusvragen, poulewedstrijden, jokers en finales worden bijgewerkt in Supabase.
-- Nieuwe antwoorden moeten na verversen zichtbaar blijven.
+<!-- v59 update:
+- Algemene opslagfix voor oude accounts: poule, finales, jokers en bonus gebruiken nu upsert in plaats van delete + insert.
+- Bestaande lege records worden bijgewerkt in plaats van dat opslaan faalt of leeg terugkomt.
+- Na opslaan wordt direct gecontroleerd of de regels echt in Supabase staan.
 -->
 
 <!-- v53 update:
@@ -512,26 +512,42 @@ function replaceRowsByKey(existing, incoming, keyFn){
   ];
 }
 
-// v58: Oude accounts worden NIET meer delete+insert opgeslagen.
-// Dat gaf problemen bij bestaande bonusvragen/voorspellingen. We gebruiken altijd upsert,
-// zodat bestaande regels worden bijgewerkt en nieuwe regels worden aangemaakt.
+// v59: Algemene opslag voor oude én nieuwe accounts.
+// Niet verwijderen + invoegen, maar upsert: bestaande regels worden bijgewerkt,
+// nieuwe regels worden aangemaakt. Dit voorkomt problemen bij oude lege records.
 async function replaceParticipantRowsInSupabase(table, pid, keyColumn, rows){
   if(!rows || !rows.length) return [];
-  const conflictMap={
-    predictions: 'participant_id,match_id',
-    bonus_answers: 'participant_id,question_id'
-  };
-  const onConflict=conflictMap[table] || `participant_id,${keyColumn}`;
-  const saved=await db.from(table)
-    .upsert(rows,{onConflict})
+  const cleanRows = rows.map(row => ({...row, participant_id: pid}));
+  const conflictTarget = keyColumn === 'match_id'
+    ? 'participant_id,match_id'
+    : 'participant_id,question_id';
+
+  const saved = await db
+    .from(table)
+    .upsert(cleanRows, { onConflict: conflictTarget })
     .select();
+
   if(saved.error){
-    throw new Error(`${table}: regels konden niet worden opgeslagen. ${saved.error.message}`);
+    throw new Error(`${table}: opslaan/updaten is mislukt. ${saved.error.message}`);
   }
-  if(!saved.data || saved.data.length!==rows.length){
+  if(!saved.data || saved.data.length !== cleanRows.length){
     throw new Error(`${table}: opgeslagen regels konden niet goed worden teruggelezen. Controleer SELECT-policy.`);
   }
-  return saved.data;
+
+  const keys = [...new Set(cleanRows.map(r => String(r[keyColumn])))] ;
+  const verify = await db
+    .from(table)
+    .select('*')
+    .eq('participant_id', pid)
+    .in(keyColumn, keys);
+
+  if(verify.error){
+    throw new Error(`${table}: controle na opslaan mislukt. ${verify.error.message}`);
+  }
+  if(!verify.data || verify.data.length < cleanRows.length){
+    throw new Error(`${table}: opslaan lijkt niet in Supabase te staan na controle.`);
+  }
+  return verify.data;
 }
 function clearOldLocalParticipantCache(pid){
   if(!pid || pid==='admin') return;
