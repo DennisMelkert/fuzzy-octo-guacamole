@@ -1,3 +1,9 @@
+<!-- v69 update:
+- Als Invullen gesloten staat, tonen Invullen, Finaleschema en Bonus duidelijk (gesloten) in tabs én paginatitels.
+- Deelnemers houden een kijkfunctie: bestaande voorspellingen blijven zichtbaar, maar velden/knoppen zijn geblokkeerd.
+- Automatisch verversen blijft op dezelfde gesloten kijkpagina in plaats van terug te springen naar Stand.
+-->
+
 <!-- v65 update:
 - Poule sluiten is nu hard: live Supabase-check vóór aanmelden en vóór elke opslaan-actie.
 - Als voorspellingen gesloten zijn, kunnen deelnemers poulewedstrijden, finaleschema en bonus niet meer invoeren of wijzigen.
@@ -499,14 +505,31 @@ function updateNavigation(){
   document.getElementById("publicNav").classList.toggle("hidden", access);
   document.getElementById("mainNav").classList.toggle("hidden", !access);
 
-  // v66: als invullen gesloten is, zien deelnemers dit meteen in de tabs.
-  const closed = !state.settings.predictions_open && !state.adminUnlocked;
+  // v69: zodra beheer Invullen dicht zet, moet iedereen dit duidelijk zien.
+  // Admin mag nog wel beheren, maar de labels tonen óók voor admin dat de deelnemersinvoer gesloten is.
+  updateClosedLabels();
+}
+
+function updateClosedLabels(){
+  const closed = !state.settings.predictions_open;
+  const labels = {
+    predictions: closed ? "✍️ Invullen (gesloten)" : "✍️ Invullen",
+    finals: closed ? "🏆 Finaleschema (gesloten)" : "🏆 Finaleschema",
+    bonus: closed ? "⭐ Bonus (gesloten)" : "⭐ Bonus"
+  };
   const predBtn = document.getElementById("btn-predictions");
   const finalsBtn = document.getElementById("btn-finals");
   const bonusBtn = document.getElementById("btn-bonus");
-  if(predBtn) predBtn.textContent = closed ? "✍️ Invullen (gesloten)" : "✍️ Invullen";
-  if(finalsBtn) finalsBtn.textContent = closed ? "🏆 Finaleschema (gesloten)" : "🏆 Finaleschema";
-  if(bonusBtn) bonusBtn.textContent = closed ? "⭐ Bonus (gesloten)" : "⭐ Bonus";
+  if(predBtn) predBtn.textContent = labels.predictions;
+  if(finalsBtn) finalsBtn.textContent = labels.finals;
+  if(bonusBtn) bonusBtn.textContent = labels.bonus;
+
+  const predTitle = document.querySelector("#tab-predictions h2");
+  const finalsTitle = document.querySelector("#tab-finals h2");
+  const bonusTitle = document.querySelector("#tab-bonus h2");
+  if(predTitle) predTitle.textContent = closed ? "✍️ Voorspellingen invullen (gesloten)" : "✍️ Voorspellingen invullen";
+  if(finalsTitle) finalsTitle.textContent = closed ? "🏆 Finaleschema (gesloten)" : "🏆 Finaleschema";
+  if(bonusTitle) bonusTitle.textContent = closed ? "⭐ Bonusvragen (gesloten)" : "⭐ Bonusvragen";
 }
 function showTab(tab){
   if(!publicTab(tab) && !hasAccess()){
@@ -609,8 +632,8 @@ async function pollClosedSettings(){
   state.settings.registration_open = registrationOpen;
   if(changed){
     renderAll();
-    if(!predictionsOpen && ["predictions","finals","bonus"].includes(window.currentTab)) showTab("standings");
-    if(!registrationOpen && window.currentTab==="signup") showTab("signup");
+    // v69: blijf op Invullen/Finaleschema/Bonus staan als kijkfunctie; spring niet terug naar Stand.
+    if(["predictions","finals","bonus","signup"].includes(window.currentTab)) showTab(window.currentTab);
   }
 }
 setInterval(pollClosedSettings, 5000);
@@ -2340,7 +2363,7 @@ function renderRules(){
   document.getElementById("rulesBox").innerHTML=`<div class="card"><h3>Poulewedstrijden</h3><table class="table"><tbody><tr><td>Exacte uitslag goed</td><td><strong>6 punten</strong></td></tr><tr><td>Winnaar/gelijkspel goed</td><td><strong>3 punten</strong></td></tr><tr><td>Joker ingezet op poulewedstrijd</td><td><strong>Punten x2</strong></td></tr></tbody></table><p class="small">Poulepunten tellen direct per wedstrijd zodra de beheerder die officiële uitslag invult.</p></div><div class="card"><h3>Knock-out wedstrijden</h3><table class="table"><thead><tr><th>Ronde</th><th>Uitslag exact</th><th>Winnaar/gelijkspel</th><th>Land door verkeerde plek</th><th>Land juiste plek</th><th>Alles exact extra</th></tr></thead><tbody><tr><td>Laatste 32 / Achtste finale</td><td>9 pnt</td><td>3 pnt</td><td>2 pnt per land</td><td>4 pnt per land</td><td>9 pnt extra</td></tr><tr><td>Kwartfinale</td><td>9 pnt</td><td>3 pnt</td><td>4 pnt per land</td><td>6 pnt per land</td><td>13 pnt extra</td></tr><tr><td>Halve finale</td><td>9 pnt</td><td>3 pnt</td><td>6 pnt per land</td><td>8 pnt per land</td><td>17 pnt extra</td></tr><tr><td>Finale</td><td>9 pnt</td><td>3 pnt</td><td>10 pnt per land</td><td>10 pnt per land</td><td>25 pnt extra</td></tr></tbody></table><p class="small">Beheer is leidend: landpunten tellen direct zodra de beheerder de landen invult. Uitslagpunten komen erbij zodra de beheerder de officiële uitslag invult. Haal je als beheerder iets weg, dan verdwijnen die punten ook weer.</p></div><div class="card"><h3>Bonusvragen</h3><p>Per goede bonusvraag: <strong>10 punten</strong></p></div>`;
 }
 function logout(){localStorage.removeItem("wk_current_participant");localStorage.removeItem("wk_admin_unlocked");state.currentParticipant=null;state.adminUnlocked=false;renderAll();showTab("signup");}
-function renderAll(){updateNavigation();renderAccessBox();renderStandings();renderSignup();renderPredictions();renderOverview();renderFinals();renderBonus();renderChat();renderAdmin();renderRules();renderStickyProgress(window.currentTab);}
+function renderAll(){updateNavigation();renderAccessBox();renderStandings();renderSignup();renderPredictions();renderOverview();renderFinals();renderBonus();renderChat();renderAdmin();renderRules();updateClosedLabels();renderStickyProgress(window.currentTab);}
 loadAll();
 </script>
 </body>
