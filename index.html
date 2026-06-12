@@ -303,6 +303,22 @@ div[style*="overflow-x:auto"]::-webkit-scrollbar{
   cursor:pointer;
 }
 
+
+/* v68: Bonusvragen ook rood/groen in totaaloverzicht */
+.bonus-overview-good{background:#14532d!important;color:#bbf7d0!important;font-weight:900;border-radius:10px}
+.bonus-overview-wrong{background:#7f1d1d!important;color:#fecaca!important;font-weight:900;border-radius:10px}
+.bonus-overview-empty{color:#94a3b8}
+.bonus-overview-points{display:block;font-size:10px;font-weight:900;margin-top:3px;opacity:.95}
+
+/* v67: Bonusvragen rood/groen zodra officiële bonusantwoorden bekend zijn */
+.bonus-good{border-color:#22c55e;background:rgba(34,197,94,.12)}
+.bonus-good input,.bonus-good select{border-color:#22c55e;background:#052e16;color:#dcfce7;font-weight:900}
+.bonus-wrong{border-color:#ef4444;background:rgba(239,68,68,.10)}
+.bonus-wrong input,.bonus-wrong select{border-color:#ef4444;background:#450a0a;color:#fee2e2;font-weight:900}
+.bonus-result{margin-top:4px;font-weight:900}
+.bonus-result.good{color:#86efac}
+.bonus-result.wrong{color:#fecaca}
+
 </style>
 </head>
 <body>
@@ -1775,12 +1791,21 @@ function renderOverview(){
   html+=`<div class="group-title">⭐ Bonusvragen</div>`;
   html+=`<div style="overflow-x:auto"><table class="table"><thead><tr><th>Vraag</th>${participants.map(p=>`<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>`;
 
+  const officialBonus = officialBonusMap();
   bonusQuestions.forEach(q=>{
+    const officialAnswer = officialBonus[q.id] || '';
+    const hasOfficial = cleanBonusAnswer(officialAnswer) !== '';
     html+=`<tr>
-      <td>${esc(q.question)}</td>
+      <td>${esc(q.question)}${hasOfficial ? `<div class="small">Officieel: <strong>${esc(officialAnswer)}</strong></div>` : ``}</td>
       ${participants.map(p=>{
-        const answer = participantBonusMap(p.id)[q.id] || '-';
-        return `<td>${esc(answer)}</td>`;
+        const rawAnswer = participantBonusMap(p.id)[q.id] || '';
+        const answer = rawAnswer || '-';
+        const hasAnswer = cleanBonusAnswer(rawAnswer) !== '';
+        const isGood = hasOfficial && hasAnswer && cleanBonusAnswer(rawAnswer) === cleanBonusAnswer(officialAnswer);
+        const isWrong = hasOfficial && hasAnswer && !isGood;
+        const cls = isGood ? 'bonus-overview-good' : (isWrong ? 'bonus-overview-wrong' : (!hasAnswer ? 'bonus-overview-empty' : ''));
+        const points = isGood ? '<span class="bonus-overview-points">+10 punten</span>' : (isWrong ? '<span class="bonus-overview-points">0 punten</span>' : '');
+        return `<td class="${cls}">${esc(answer)}${points}</td>`;
       }).join("")}
     </tr>`;
   });
@@ -2039,21 +2064,34 @@ async function savePredictionGroup(group,btn){
   markSaved(newBtn,"Opgeslagen");
   showToast("✅ Opgeslagen");
 }
+function cleanBonusAnswer(v){
+  return String(v || "").trim().toLowerCase();
+}
 function renderBonus(){
   if(!hasAccess()){document.getElementById("bonusBox").innerHTML=`<div class="notice">🔒 Je kunt bonusvragen pas invullen na goedkeuring en betaling.</div>`;return;}
   const cur=state.currentParticipant;
   if(!cur||cur.id==="admin"){document.getElementById("bonusBox").innerHTML=`<div class="notice">Kies eerst je naam bij Invullen.</div>`;return;}
   const ans=participantBonusMap(cur.id);
+  const official=officialBonusMap();
   const bp=bonusProgress(cur.id);
   document.getElementById("bonusBox").innerHTML=
     progressBox('Voortgang bonusvragen', bp.filled, bp.total, 'antwoord per vraag') +
     `<div class="notice">Vul je antwoorden in en klik onderaan op <strong>Alle bonusvragen opslaan</strong>. Los per vraag opslaan kan ook.</div>` +
     bonusQuestions.map(q=>{
       const v=ans[q.id]||"";
+      const officialAnswer=official[q.id]||"";
+      const hasOfficial=cleanBonusAnswer(officialAnswer)!=="";
+      const hasAnswer=cleanBonusAnswer(v)!=="";
+      const isGood=hasOfficial && hasAnswer && cleanBonusAnswer(v)===cleanBonusAnswer(officialAnswer);
+      const isWrong=hasOfficial && hasAnswer && !isGood;
+      const bonusClass=isGood ? " bonus-good" : (isWrong ? " bonus-wrong" : "");
+      const resultText=isGood
+        ? `<div class="small bonus-result good">🟢 Goed: +10 punten</div>`
+        : (isWrong ? `<div class="small bonus-result wrong">🔴 Fout: 0 punten</div>` : "");
       const field=q.type==="text"
         ? `<input id="bonus-${q.id}" value="${esc(v)}" placeholder="Vul spelernaam in...">`
         : `<select id="bonus-${q.id}">${q.options?optionList(q.options,v):countryOptions(v)}</select>`;
-      return `<div class="match"><strong>${q.question}</strong><div class="small">10 punten</div>${field}<button class="save" onclick="saveBonus('${q.id}', this)">Deze vraag opslaan</button></div>`;
+      return `<div class="match${bonusClass}"><strong>${q.question}</strong><div class="small">10 punten</div>${field}${resultText}<button class="save" onclick="saveBonus('${q.id}', this)">Deze vraag opslaan</button></div>`;
     }).join("") +
     `<div class="group-actions"><button class="save" onclick="saveAllBonus(this)">Alle bonusvragen opslaan</button></div>`;
   if(predictionsClosedForParticipant()) applyClosedView("bonusBox");
