@@ -1,3 +1,8 @@
+<!-- v65 update:
+- Poule sluiten blokkeert nu ook echt alle deelnemer-opslag: poulewedstrijden, finaleschema en bonusvragen.
+- De tabbladen Finaleschema en Bonus tonen na sluiten alleen nog een gesloten-melding voor deelnemers.
+-->
+
 <!-- v64 update:
 - Live fix poule invullen: bovenste voortgangsbalk en voorspelde poulestand rekenen nu direct met actuele inputvelden, nog vóór opslaan.
 -->
@@ -503,6 +508,20 @@ function showToast(message="✅ Opgeslagen"){
   clearTimeout(window.toastTimer);
   window.toastTimer=setTimeout(()=>toast.classList.remove("show"),2200);
 }
+function predictionsClosedForParticipant(){
+  return !state.settings.predictions_open && !state.adminUnlocked;
+}
+function closedPredictionsMessage(){
+  return "De poule is gesloten. Voorspellingen kunnen niet meer worden gewijzigd.";
+}
+function blockIfPredictionsClosed(){
+  if(predictionsClosedForParticipant()){
+    alert(closedPredictionsMessage());
+    return true;
+  }
+  return false;
+}
+
 
 
 // v48: Supabase is de enige bron van waarheid voor voorspellingen en bonusantwoorden.
@@ -1495,7 +1514,7 @@ function renderStickyProgress(tab=window.currentTab){
   const el=document.getElementById('stickyProgress');
   if(!el) return;
   const pid=state.currentParticipant?.id;
-  if(!hasAccess() || !pid || pid==='admin' || !['predictions','finals','bonus'].includes(tab)){
+  if(!hasAccess() || predictionsClosedForParticipant() || !pid || pid==='admin' || !['predictions','finals','bonus'].includes(tab)){
     el.classList.add('hidden');
     el.innerHTML='';
     return;
@@ -1695,6 +1714,7 @@ function renderOverview(){
 
 function renderFinals(){
   if(!hasAccess()){document.getElementById("finalsBox").innerHTML=`<div class="notice">🔒 Je ziet het finaleschema pas na goedkeuring en betaling.</div>`;return;}
+  if(predictionsClosedForParticipant()){document.getElementById("finalsBox").innerHTML=`<div class="notice">🔒 ${closedPredictionsMessage()}</div>`;return;}
   const teams=getKnockoutTeams();
   // Finaleschema is altijd de gok/voorspelling van de deelnemer.
   // Officiële finales vul je alleen in via Beheer, zodat dit nooit door elkaar loopt.
@@ -1778,6 +1798,7 @@ async function autoSaveAdminKnockoutTeamsFromSelect(select){
   },250);
 }
 async function saveKnockoutPrediction(id,btn){
+  if(blockIfPredictionsClosed()) return;
   const pid=state.currentParticipant?.id;
   if(!pid||pid==='admin') return alert('Log eerst in als deelnemer.');
   if(!participantRoundUnlockedForMatch(pid,id)) return alert(unlockNoticeForMatch(id));
@@ -1887,6 +1908,7 @@ function limitJokers(changed){
   refreshJokerButtons();
 }
 async function savePredictionGroup(group,btn){
+  if(blockIfPredictionsClosed()) return;
   const pid=state.currentParticipant?.id; if(!pid||pid==="admin")return alert("Kies eerst je naam.");
   const rows=matches.filter(m=>m.group===group).map(m=>{
     const h=document.getElementById(`pred-h-${m.id}`).value;
@@ -1941,6 +1963,7 @@ async function savePredictionGroup(group,btn){
 }
 function renderBonus(){
   if(!hasAccess()){document.getElementById("bonusBox").innerHTML=`<div class="notice">🔒 Je kunt bonusvragen pas invullen na goedkeuring en betaling.</div>`;return;}
+  if(predictionsClosedForParticipant()){document.getElementById("bonusBox").innerHTML=`<div class="notice">🔒 ${closedPredictionsMessage()}</div>`;return;}
   const cur=state.currentParticipant;
   if(!cur||cur.id==="admin"){document.getElementById("bonusBox").innerHTML=`<div class="notice">Kies eerst je naam bij Invullen.</div>`;return;}
   const ans=participantBonusMap(cur.id);
@@ -1971,6 +1994,7 @@ function updateLocalBonusState(pid, rows){
   state.bonus=replaceRowsByKey(state.bonus, rows, x=>`${x.participant_id}_${x.question_id}`);
 }
 async function saveBonus(qid,btn){
+  if(blockIfPredictionsClosed()) return;
   const pid=state.currentParticipant?.id;
   if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
   const rows=collectBonusRows(pid, qid);
@@ -1992,6 +2016,7 @@ async function saveBonus(qid,btn){
   showToast("✅ Opgeslagen");
 }
 async function saveAllBonus(btn){
+  if(blockIfPredictionsClosed()) return;
   const pid=state.currentParticipant?.id;
   if(!pid||pid==="admin") return alert("Log eerst in als deelnemer.");
   const rows=collectBonusRows(pid);
